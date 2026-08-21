@@ -1,0 +1,469 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_radius.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/utils/format_relative_time.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../profile/presentation/providers/profile_providers.dart';
+import '../../../profile/presentation/widgets/profile_avatar.dart';
+import '../../data/models/post.dart';
+import '../providers/post_providers.dart';
+import '../widgets/dummy_comments.dart';
+import '../widgets/post_action_bar.dart';
+import '../widgets/post_image.dart';
+
+class PostDetailScreen extends ConsumerStatefulWidget {
+  const PostDetailScreen({super.key, required this.postId});
+
+  final String postId;
+
+  @override
+  ConsumerState<PostDetailScreen> createState() => _PostDetailScreenState();
+}
+
+class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
+  bool _liked = false;
+  bool _following = false;
+  int _likesDelta = 0;
+  final _commentController = TextEditingController();
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  void _toggleLike() {
+    setState(() {
+      if (_liked) {
+        _liked = false;
+        _likesDelta -= 1;
+      } else {
+        _liked = true;
+        _likesDelta += 1;
+      }
+    });
+  }
+
+  void _showPostActions(Post post) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surfaceContainerLowest,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.marginMobile,
+              vertical: AppSpacing.md,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: AppColors.error,
+                  ),
+                  title: Text(
+                    'Delete',
+                    style: AppTextStyles.bodyMd.copyWith(
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _confirmDelete(post);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _confirmDelete(Post post) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete post?'),
+          content: const Text(
+            'This post will be permanently deleted. This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(foregroundColor: AppColors.error),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final success = await ref
+        .read(deletePostControllerProvider.notifier)
+        .delete(post.id);
+
+    if (!mounted) return;
+
+    if (success) {
+      context.pop();
+      return;
+    }
+
+    final error = ref.read(deletePostControllerProvider).error;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error?.toString() ?? 'Failed to delete post.')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final postAsync = ref.watch(postDetailProvider(widget.postId));
+    final currentUserId = ref.watch(authRepositoryProvider).currentUser?.id;
+    final isDeleting = ref.watch(deletePostControllerProvider).isLoading;
+
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          onPressed: isDeleting ? null : () => context.pop(),
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        title: Text(
+          'Post',
+          style: AppTextStyles.headlineMd.copyWith(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        actions: [
+          postAsync.maybeWhen(
+            data: (post) {
+              final isOwner =
+                  currentUserId != null && post.userId == currentUserId;
+              if (!isOwner) return const SizedBox.shrink();
+              return IconButton(
+                onPressed: isDeleting ? null : () => _showPostActions(post),
+                icon: const Icon(Icons.more_vert_rounded),
+              );
+            },
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          postAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.marginMobile),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      error.toString(),
+                      style: AppTextStyles.bodyMd.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    FilledButton(
+                      onPressed: () =>
+                          ref.invalidate(postDetailProvider(widget.postId)),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            data: (post) {
+              final likesCount =
+                  (post.likesCount + _likesDelta).clamp(0, 1 << 30);
+              return _PostDetailBody(
+                post: post,
+                liked: _liked,
+                following: _following,
+                likesCount: likesCount,
+                commentController: _commentController,
+                onLike: _toggleLike,
+                onFollow: () => setState(() => _following = !_following),
+                onShare: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Share coming soon')),
+                  );
+                },
+                onSubmitComment: () {
+                  FocusScope.of(context).unfocus();
+                  _commentController.clear();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Comments coming soon')),
+                  );
+                },
+              );
+            },
+          ),
+          if (isDeleting)
+            const ColoredBox(
+              color: Color(0x66000000),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PostDetailBody extends ConsumerWidget {
+  const _PostDetailBody({
+    required this.post,
+    required this.liked,
+    required this.following,
+    required this.likesCount,
+    required this.commentController,
+    required this.onLike,
+    required this.onFollow,
+    required this.onShare,
+    required this.onSubmitComment,
+  });
+
+  final Post post;
+  final bool liked;
+  final bool following;
+  final int likesCount;
+  final TextEditingController commentController;
+  final VoidCallback onLike;
+  final VoidCallback onFollow;
+  final VoidCallback onShare;
+  final VoidCallback onSubmitComment;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final postRepo = ref.watch(postRepositoryProvider);
+    final profileRepo = ref.watch(profileRepositoryProvider);
+    final imageUrl = postRepo.imagePublicUrl(post.imagePath);
+    final author = post.author;
+    final avatarUrl = profileRepo.avatarPublicUrl(author?.avatarUrl);
+    final displayName = author?.displayName ?? 'User';
+    final caption = post.caption?.trim() ?? '';
+    final hashtags = post.hashtags;
+
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                PostImage(
+                  imageUrl: imageUrl,
+                  borderRadius: BorderRadius.zero,
+                  aspectRatio: 1,
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(AppSpacing.marginMobile),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          ProfileAvatar(
+                            imageUrl: avatarUrl,
+                            size: 44,
+                            showBorder: false,
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  displayName,
+                                  style: AppTextStyles.labelMd.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  formatRelativeTime(post.createdAt),
+                                  style: AppTextStyles.labelSm.copyWith(
+                                    color: AppColors.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          FilledButton(
+                            onPressed: onFollow,
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(88, 36),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm + 4,
+                              ),
+                              backgroundColor: following
+                                  ? AppColors.surfaceContainerHigh
+                                  : AppColors.primary,
+                              foregroundColor: following
+                                  ? AppColors.onSurface
+                                  : AppColors.onPrimary,
+                            ),
+                            child: Text(following ? 'Following' : 'Follow'),
+                          ),
+                        ],
+                      ),
+                      if (caption.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.sm + 4),
+                        Text(
+                          caption,
+                          style: AppTextStyles.bodyMd.copyWith(
+                            color: AppColors.onSurface,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                      if (hashtags.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: hashtags
+                              .map(
+                                (tag) => Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceContainer,
+                                    borderRadius: AppRadius.borderFull,
+                                  ),
+                                  child: Text(
+                                    tag,
+                                    style: AppTextStyles.labelSm.copyWith(
+                                      color: AppColors.onSurfaceVariant,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.sm),
+                      const Divider(height: 1, color: AppColors.outlineVariant),
+                      PostActionBar(
+                        likesCount: likesCount,
+                        commentsCount: post.commentsCount > 0
+                            ? post.commentsCount
+                            : dummyComments.length,
+                        liked: liked,
+                        showBookmark: false,
+                        showShare: true,
+                        onLike: onLike,
+                        onShare: onShare,
+                      ),
+                      const Divider(height: 1, color: AppColors.outlineVariant),
+                      const SizedBox(height: AppSpacing.md),
+                      const DummyCommentsList(),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Material(
+          color: AppColors.surface,
+          elevation: 8,
+          shadowColor: Colors.black12,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.marginMobile,
+                AppSpacing.sm,
+                AppSpacing.marginMobile,
+                AppSpacing.sm,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: commentController,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        hintText: 'Add a comment...',
+                        filled: true,
+                        fillColor: AppColors.surfaceContainerLow,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm + 4,
+                          vertical: AppSpacing.sm,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: AppRadius.borderFull,
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: AppRadius.borderFull,
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: AppRadius.borderFull,
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                      onSubmitted: (_) => onSubmitComment(),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  IconButton.filled(
+                    onPressed: onSubmitComment,
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.onPrimary,
+                    ),
+                    icon: const Icon(Icons.send_rounded, size: 20),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}

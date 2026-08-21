@@ -7,8 +7,10 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/auth/presentation/screens/sign_in_screen.dart';
 import '../../features/auth/presentation/screens/sign_up_screen.dart';
-import '../../features/home/presentation/screens/home_placeholder_screen.dart';
+import '../../features/home/presentation/screens/home_feed_screen.dart';
 import '../../features/notification/presentation/screens/notifications_placeholder_screen.dart';
+import '../../features/post/presentation/screens/create_post_screen.dart';
+import '../../features/post/presentation/screens/post_detail_screen.dart';
 import '../../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/shell/presentation/screens/main_shell_screen.dart';
@@ -78,7 +80,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/home',
                 name: 'home',
-                builder: (context, state) => const HomePlaceholderScreen(),
+                builder: (context, state) => const HomeFeedScreen(),
               ),
             ],
           ),
@@ -108,6 +110,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/profile/edit',
         name: 'edit-profile',
         builder: (context, state) => const EditProfileScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/create-post',
+        name: 'create-post',
+        builder: (context, state) => const CreatePostScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/posts/:id',
+        name: 'post-detail',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return PostDetailScreen(postId: id);
+        },
       ),
     ],
   );

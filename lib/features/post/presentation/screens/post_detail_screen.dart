@@ -104,6 +104,18 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     setState(() => _likeBusy = false);
   }
 
+  Future<void> _refreshPost() async {
+    _likeSeeded = false;
+    _followSeeded = false;
+    ref.invalidate(postDetailProvider(widget.postId));
+    ref.invalidate(postCommentsProvider(widget.postId));
+    ref.invalidate(isFollowingProvider);
+    await Future.wait([
+      ref.read(postDetailProvider(widget.postId).future),
+      ref.read(postCommentsProvider(widget.postId).future),
+    ]);
+  }
+
   Future<void> _toggleFollow(String userId) async {
     if (_followBusy || _following == null) return;
 
@@ -348,6 +360,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                 commentController: _commentController,
                 isCommenting: isCommenting,
                 followBusy: _followBusy,
+                onRefresh: _refreshPost,
                 onLike: () => _toggleLike(post),
                 onFollow: () => _toggleFollow(post.userId),
                 onShare: () {
@@ -381,6 +394,7 @@ class _PostDetailBody extends ConsumerWidget {
     required this.commentController,
     required this.isCommenting,
     required this.followBusy,
+    required this.onRefresh,
     required this.onLike,
     required this.onFollow,
     required this.onShare,
@@ -396,6 +410,7 @@ class _PostDetailBody extends ConsumerWidget {
   final TextEditingController commentController;
   final bool isCommenting;
   final bool followBusy;
+  final Future<void> Function() onRefresh;
   final VoidCallback onLike;
   final VoidCallback onFollow;
   final VoidCallback onShare;
@@ -423,15 +438,18 @@ class _PostDetailBody extends ConsumerWidget {
     return Column(
       children: [
         Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                PostImage(
-                  imageUrl: imageUrl,
-                  borderRadius: BorderRadius.zero,
-                  aspectRatio: 1,
-                ),
+          child: RefreshIndicator(
+            onRefresh: onRefresh,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  PostImage(
+                    imageUrl: imageUrl,
+                    borderRadius: BorderRadius.zero,
+                    aspectRatio: 1,
+                  ),
                 Padding(
                   padding: const EdgeInsets.all(AppSpacing.marginMobile),
                   child: Column(
@@ -553,7 +571,8 @@ class _PostDetailBody extends ConsumerWidget {
                     ],
                   ),
                 ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

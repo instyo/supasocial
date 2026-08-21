@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/comment.dart';
 import '../models/post.dart';
 import 'post_repository.dart';
 
@@ -12,6 +13,7 @@ class PostRepositoryImpl implements PostRepository {
 
   static const _table = 'posts';
   static const _likesTable = 'post_likes';
+  static const _commentsTable = 'comments';
   static const _bucket = 'posts';
   static const _selectWithAuthor =
       '*, profiles:user_id(id, username, full_name, avatar_url)';
@@ -221,6 +223,60 @@ class PostRepositoryImpl implements PostRepository {
     } catch (e) {
       if (e is PostFailure) rethrow;
       throw const PostFailure('Failed to unlike post. Please try again.');
+    }
+  }
+
+  @override
+  Future<List<Comment>> getComments(String postId) async {
+    try {
+      final data = await _client
+          .from(_commentsTable)
+          .select(_selectWithAuthor)
+          .eq('post_id', postId)
+          .order('created_at', ascending: true);
+
+      return (data as List<dynamic>)
+          .map((row) => Comment.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } on PostgrestException catch (e) {
+      throw PostFailure(e.message);
+    } catch (_) {
+      throw const PostFailure('Failed to load comments. Please try again.');
+    }
+  }
+
+  @override
+  Future<Comment> addComment({
+    required String postId,
+    required String content,
+  }) async {
+    final userId = _userId;
+    if (userId == null) {
+      throw const PostFailure('You must be signed in to comment.');
+    }
+
+    final cleaned = content.trim();
+    if (cleaned.isEmpty) {
+      throw const PostFailure('Comment cannot be empty.');
+    }
+
+    try {
+      final data = await _client
+          .from(_commentsTable)
+          .insert({
+            'post_id': postId,
+            'user_id': userId,
+            'content': cleaned,
+          })
+          .select(_selectWithAuthor)
+          .single();
+
+      return Comment.fromJson(data);
+    } on PostgrestException catch (e) {
+      throw PostFailure(e.message);
+    } catch (e) {
+      if (e is PostFailure) rethrow;
+      throw const PostFailure('Failed to add comment. Please try again.');
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/supabase/supabase_init.dart';
 import '../../../profile/presentation/providers/profile_providers.dart';
+import '../../data/models/comment.dart';
 import '../../data/models/post.dart';
 import '../../data/repositories/post_repository.dart';
 import '../../data/repositories/post_repository_impl.dart';
@@ -40,6 +41,22 @@ class FeedNotifier extends AsyncNotifier<List<Post>> {
       for (final post in current)
         if (post.id == postId)
           post.copyWith(isLiked: isLiked, likesCount: likesCount)
+        else
+          post,
+    ]);
+  }
+
+  void patchCommentsCount({
+    required String postId,
+    required int commentsCount,
+  }) {
+    final current = state.asData?.value;
+    if (current == null) return;
+
+    state = AsyncData([
+      for (final post in current)
+        if (post.id == postId)
+          post.copyWith(commentsCount: commentsCount)
         else
           post,
     ]);
@@ -85,6 +102,57 @@ final postDetailProvider =
     FutureProvider.family<Post, String>((ref, postId) {
   return ref.watch(postRepositoryProvider).getPostById(postId);
 });
+
+final postCommentsProvider =
+    FutureProvider.family<List<Comment>, String>((ref, postId) {
+  return ref.watch(postRepositoryProvider).getComments(postId);
+});
+
+final addCommentControllerProvider =
+    AsyncNotifierProvider<AddCommentController, void>(
+  AddCommentController.new,
+);
+
+class AddCommentController extends AsyncNotifier<void> {
+  PostRepository get _repository => ref.read(postRepositoryProvider);
+
+  @override
+  Future<void> build() async {}
+
+  Future<bool> add({
+    required String postId,
+    required String content,
+  }) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await _repository.addComment(postId: postId, content: content);
+    });
+
+    if (!state.hasError) {
+      ref.invalidate(postCommentsProvider(postId));
+      ref.invalidate(postDetailProvider(postId));
+
+      final feed = ref.read(feedNotifierProvider).asData?.value;
+      if (feed != null) {
+        for (final post in feed) {
+          if (post.id == postId) {
+            ref.read(feedNotifierProvider.notifier).patchCommentsCount(
+                  postId: postId,
+                  commentsCount: post.commentsCount + 1,
+                );
+            break;
+          }
+        }
+      }
+    }
+
+    return !state.hasError;
+  }
+
+  void reset() {
+    state = const AsyncData(null);
+  }
+}
 
 final createPostControllerProvider =
     AsyncNotifierProvider<CreatePostController, void>(

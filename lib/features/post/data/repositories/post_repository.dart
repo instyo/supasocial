@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import '../models/comment.dart';
 import '../models/post.dart';
 
 abstract class PostRepository {
@@ -19,6 +20,13 @@ abstract class PostRepository {
   Future<void> likePost(String postId);
 
   Future<void> unlikePost(String postId);
+
+  Future<List<Comment>> getComments(String postId);
+
+  Future<Comment> addComment({
+    required String postId,
+    required String content,
+  });
 
   String imagePublicUrl(String path);
 }

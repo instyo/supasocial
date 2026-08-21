@@ -12,7 +12,7 @@ import '../../../profile/presentation/providers/profile_providers.dart';
 import '../../../profile/presentation/widgets/profile_avatar.dart';
 import '../../data/models/post.dart';
 import '../providers/post_providers.dart';
-import '../widgets/dummy_comments.dart';
+import '../widgets/comments_list.dart';
 import '../widgets/post_action_bar.dart';
 import '../widgets/post_image.dart';
 
@@ -147,6 +147,29 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     );
   }
 
+  Future<void> _submitComment() async {
+    final text = _commentController.text.trim();
+    if (text.isEmpty) return;
+
+    final success = await ref.read(addCommentControllerProvider.notifier).add(
+          postId: widget.postId,
+          content: text,
+        );
+
+    if (!mounted) return;
+
+    if (success) {
+      _commentController.clear();
+      FocusScope.of(context).unfocus();
+      return;
+    }
+
+    final error = ref.read(addCommentControllerProvider).error;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error?.toString() ?? 'Failed to add comment.')),
+    );
+  }
+
   Future<void> _confirmDelete(Post post) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -195,6 +218,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     final postAsync = ref.watch(postDetailProvider(widget.postId));
     final currentUserId = ref.watch(authRepositoryProvider).currentUser?.id;
     final isDeleting = ref.watch(deletePostControllerProvider).isLoading;
+    final isCommenting = ref.watch(addCommentControllerProvider).isLoading;
 
     return Scaffold(
       appBar: AppBar(
@@ -264,6 +288,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                 following: _following,
                 likesCount: _likesCount ?? post.likesCount,
                 commentController: _commentController,
+                isCommenting: isCommenting,
                 onLike: () => _toggleLike(post),
                 onFollow: () => setState(() => _following = !_following),
                 onShare: () {
@@ -271,13 +296,7 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                     const SnackBar(content: Text('Share coming soon')),
                   );
                 },
-                onSubmitComment: () {
-                  FocusScope.of(context).unfocus();
-                  _commentController.clear();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Comments coming soon')),
-                  );
-                },
+                onSubmitComment: _submitComment,
               );
             },
           ),
@@ -299,6 +318,7 @@ class _PostDetailBody extends ConsumerWidget {
     required this.following,
     required this.likesCount,
     required this.commentController,
+    required this.isCommenting,
     required this.onLike,
     required this.onFollow,
     required this.onShare,
@@ -310,6 +330,7 @@ class _PostDetailBody extends ConsumerWidget {
   final bool following;
   final int likesCount;
   final TextEditingController commentController;
+  final bool isCommenting;
   final VoidCallback onLike;
   final VoidCallback onFollow;
   final VoidCallback onShare;
@@ -433,9 +454,7 @@ class _PostDetailBody extends ConsumerWidget {
                       const Divider(height: 1, color: AppColors.outlineVariant),
                       PostActionBar(
                         likesCount: likesCount,
-                        commentsCount: post.commentsCount > 0
-                            ? post.commentsCount
-                            : dummyComments.length,
+                        commentsCount: post.commentsCount,
                         liked: liked,
                         showBookmark: false,
                         showShare: true,
@@ -444,7 +463,7 @@ class _PostDetailBody extends ConsumerWidget {
                       ),
                       const Divider(height: 1, color: AppColors.outlineVariant),
                       const SizedBox(height: AppSpacing.md),
-                      const DummyCommentsList(),
+                      CommentsList(postId: post.id),
                       const SizedBox(height: AppSpacing.md),
                     ],
                   ),
@@ -471,6 +490,7 @@ class _PostDetailBody extends ConsumerWidget {
                   Expanded(
                     child: TextField(
                       controller: commentController,
+                      enabled: !isCommenting,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: InputDecoration(
                         hintText: 'Add a comment...',
@@ -496,17 +516,30 @@ class _PostDetailBody extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      onSubmitted: (_) => onSubmitComment(),
+                      onSubmitted: (_) {
+                        if (!isCommenting) onSubmitComment();
+                      },
                     ),
                   ),
                   const SizedBox(width: AppSpacing.xs),
                   IconButton.filled(
-                    onPressed: onSubmitComment,
+                    onPressed: isCommenting ? null : onSubmitComment,
                     style: IconButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: AppColors.onPrimary,
+                      disabledBackgroundColor:
+                          AppColors.primary.withValues(alpha: 0.4),
                     ),
-                    icon: const Icon(Icons.send_rounded, size: 20),
+                    icon: isCommenting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.onPrimary,
+                            ),
+                          )
+                        : const Icon(Icons.send_rounded, size: 20),
                   ),
                 ],
               ),

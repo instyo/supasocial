@@ -16,6 +16,11 @@ final currentProfileProvider =
       CurrentProfileNotifier.new,
     );
 
+final profileByIdProvider =
+    FutureProvider.family<Profile, String>((ref, userId) {
+  return ref.watch(profileRepositoryProvider).getProfileById(userId);
+});
+
 class CurrentProfileNotifier extends AsyncNotifier<Profile?> {
   ProfileRepository get _repository => ref.read(profileRepositoryProvider);
 

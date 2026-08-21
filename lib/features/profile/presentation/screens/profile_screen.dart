@@ -9,6 +9,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../post/presentation/providers/post_providers.dart';
 import '../providers/profile_providers.dart';
+import '../widgets/profile_action_buttons.dart';
 import '../widgets/profile_header.dart';
 import '../widgets/profile_posts_grid.dart';
 
@@ -165,6 +166,7 @@ class ProfileScreen extends ConsumerWidget {
                 SliverToBoxAdapter(
                   child: ProfileHeader(
                     profile: profile,
+                    mode: ProfileActionsMode.own,
                     onEditProfile: () => context.push('/profile/edit'),
                     onShareProfile: () =>
                         _shareProfile(context, profile.username),

@@ -8,7 +8,9 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/format_relative_time.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../profile/presentation/providers/profile_providers.dart';
+import '../../../profile/presentation/utils/open_user_profile.dart';
 import '../../../profile/presentation/widgets/profile_avatar.dart';
 import '../../data/models/post.dart';
 import '../providers/post_providers.dart';
@@ -107,11 +109,20 @@ class _FeedPostCardState extends ConsumerState<FeedPostCard> {
     final post = widget.post;
     final postRepo = ref.watch(postRepositoryProvider);
     final profileRepo = ref.watch(profileRepositoryProvider);
+    final currentUserId = ref.watch(authRepositoryProvider).currentUser?.id;
     final imageUrl = postRepo.imagePublicUrl(post.imagePath);
     final author = post.author;
     final avatarUrl = profileRepo.avatarPublicUrl(author?.avatarUrl);
     final displayName = author?.displayName ?? 'User';
     final caption = post.caption?.trim() ?? '';
+
+    void openAuthor() {
+      openUserProfile(
+        context,
+        userId: post.userId,
+        currentUserId: currentUserId,
+      );
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -130,37 +141,41 @@ class _FeedPostCardState extends ConsumerState<FeedPostCard> {
               AppSpacing.sm,
               AppSpacing.sm,
             ),
-            child: Row(
-              children: [
-                ProfileAvatar(
-                  imageUrl: avatarUrl,
-                  size: 40,
-                  showBorder: false,
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        displayName,
-                        style: AppTextStyles.labelMd.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.onSurface,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        formatRelativeTime(post.createdAt),
-                        style: AppTextStyles.labelSm.copyWith(
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
+            child: GestureDetector(
+              onTap: openAuthor,
+              behavior: HitTestBehavior.opaque,
+              child: Row(
+                children: [
+                  ProfileAvatar(
+                    imageUrl: avatarUrl,
+                    size: 40,
+                    showBorder: false,
                   ),
-                ),
-              ],
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          displayName,
+                          style: AppTextStyles.labelMd.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.onSurface,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          formatRelativeTime(post.createdAt),
+                          style: AppTextStyles.labelSm.copyWith(
+                            color: AppColors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           GestureDetector(

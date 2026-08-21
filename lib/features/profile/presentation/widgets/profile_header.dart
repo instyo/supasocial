@@ -14,13 +14,19 @@ class ProfileHeader extends ConsumerWidget {
   const ProfileHeader({
     super.key,
     required this.profile,
-    required this.onEditProfile,
-    required this.onShareProfile,
+    this.mode = ProfileActionsMode.own,
+    this.onEditProfile,
+    this.onShareProfile,
+    this.onFollow,
+    this.isFollowing = false,
   });
 
   final Profile profile;
-  final VoidCallback onEditProfile;
-  final VoidCallback onShareProfile;
+  final ProfileActionsMode mode;
+  final VoidCallback? onEditProfile;
+  final VoidCallback? onShareProfile;
+  final VoidCallback? onFollow;
+  final bool isFollowing;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -57,6 +63,17 @@ class ProfileHeader extends ConsumerWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
+          if (profile.username.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              profile.username.startsWith('@')
+                  ? profile.username
+                  : '@${profile.username}',
+              style: AppTextStyles.labelMd.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+          ],
           if (profile.bio != null && profile.bio!.trim().isNotEmpty) ...[
             const SizedBox(height: AppSpacing.xs + 2),
             Text(
@@ -79,8 +96,11 @@ class ProfileHeader extends ConsumerWidget {
           ],
           const SizedBox(height: AppSpacing.md),
           ProfileActionButtons(
+            mode: mode,
             onEditProfile: onEditProfile,
             onShareProfile: onShareProfile,
+            onFollow: onFollow,
+            isFollowing: isFollowing,
           ),
         ],
       ),

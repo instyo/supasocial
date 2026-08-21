@@ -6,7 +6,9 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/utils/format_relative_time.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../profile/presentation/providers/profile_providers.dart';
+import '../../../profile/presentation/utils/open_user_profile.dart';
 import '../../../profile/presentation/widgets/profile_avatar.dart';
 import '../../data/models/comment.dart';
 import '../providers/post_providers.dart';
@@ -88,18 +90,30 @@ class _CommentTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileRepo = ref.watch(profileRepositoryProvider);
+    final currentUserId = ref.watch(authRepositoryProvider).currentUser?.id;
     final avatarUrl = profileRepo.avatarPublicUrl(comment.author?.avatarUrl);
     final displayName = comment.author?.displayName ?? 'User';
+
+    void openProfile() {
+      openUserProfile(
+        context,
+        userId: comment.userId,
+        currentUserId: currentUserId,
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ProfileAvatar(
-            imageUrl: avatarUrl,
-            size: 36,
-            showBorder: false,
+          GestureDetector(
+            onTap: openProfile,
+            child: ProfileAvatar(
+              imageUrl: avatarUrl,
+              size: 36,
+              showBorder: false,
+            ),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
@@ -112,10 +126,13 @@ class _CommentTile extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    displayName,
-                    style: AppTextStyles.labelMd.copyWith(
-                      fontWeight: FontWeight.w600,
+                  GestureDetector(
+                    onTap: openProfile,
+                    child: Text(
+                      displayName,
+                      style: AppTextStyles.labelMd.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 4),

@@ -5,18 +5,47 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_text_styles.dart';
 
+enum ProfileActionsMode { own, peer }
+
 class ProfileActionButtons extends StatelessWidget {
   const ProfileActionButtons({
     super.key,
-    required this.onEditProfile,
-    required this.onShareProfile,
+    this.mode = ProfileActionsMode.own,
+    this.onEditProfile,
+    this.onShareProfile,
+    this.onFollow,
+    this.isFollowing = false,
   });
 
-  final VoidCallback onEditProfile;
-  final VoidCallback onShareProfile;
+  final ProfileActionsMode mode;
+  final VoidCallback? onEditProfile;
+  final VoidCallback? onShareProfile;
+  final VoidCallback? onFollow;
+  final bool isFollowing;
 
   @override
   Widget build(BuildContext context) {
+    if (mode == ProfileActionsMode.peer) {
+      return Row(
+        children: [
+          Expanded(
+            child: _ProfileFilledButton(
+              label: isFollowing ? 'Following' : 'Follow',
+              isPrimary: !isFollowing,
+              onPressed: onFollow,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: _ProfileSoftButton(
+              label: 'Share Profile',
+              onPressed: onShareProfile,
+            ),
+          ),
+        ],
+      );
+    }
+
     return Row(
       children: [
         Expanded(
@@ -40,11 +69,11 @@ class ProfileActionButtons extends StatelessWidget {
 class _ProfileSoftButton extends StatelessWidget {
   const _ProfileSoftButton({
     required this.label,
-    required this.onPressed,
+    this.onPressed,
   });
 
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +91,41 @@ class _ProfileSoftButton extends StatelessWidget {
             style: AppTextStyles.labelMd.copyWith(
               fontWeight: FontWeight.w600,
               color: AppColors.onSurface,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileFilledButton extends StatelessWidget {
+  const _ProfileFilledButton({
+    required this.label,
+    required this.isPrimary,
+    this.onPressed,
+  });
+
+  final String label;
+  final bool isPrimary;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isPrimary ? AppColors.primary : AppColors.surfaceContainerHigh,
+      borderRadius: AppRadius.borderMd,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: AppRadius.borderMd,
+        child: Container(
+          height: 44,
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: AppTextStyles.labelMd.copyWith(
+              fontWeight: FontWeight.w600,
+              color: isPrimary ? AppColors.onPrimary : AppColors.onSurface,
             ),
           ),
         ),

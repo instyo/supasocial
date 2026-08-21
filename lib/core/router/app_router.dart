@@ -12,6 +12,7 @@ import '../../features/notification/presentation/screens/notifications_placehold
 import '../../features/post/presentation/screens/create_post_screen.dart';
 import '../../features/post/presentation/screens/post_detail_screen.dart';
 import '../../features/profile/presentation/screens/edit_profile_screen.dart';
+import '../../features/profile/presentation/screens/peer_profile_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/shell/presentation/screens/main_shell_screen.dart';
 
@@ -124,6 +125,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final id = state.pathParameters['id']!;
           return PostDetailScreen(postId: id);
+        },
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/users/:id',
+        name: 'user-profile',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return PeerProfileScreen(userId: id);
         },
       ),
     ],

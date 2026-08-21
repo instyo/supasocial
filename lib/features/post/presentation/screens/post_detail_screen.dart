@@ -9,6 +9,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/utils/format_relative_time.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../profile/presentation/providers/profile_providers.dart';
+import '../../../profile/presentation/utils/open_user_profile.dart';
 import '../../../profile/presentation/widgets/profile_avatar.dart';
 import '../../data/models/post.dart';
 import '../providers/post_providers.dart';
@@ -287,6 +288,9 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
                 liked: _liked ?? post.isLiked,
                 following: _following,
                 likesCount: _likesCount ?? post.likesCount,
+                isOwnPost: currentUserId != null &&
+                    post.userId == currentUserId,
+                currentUserId: currentUserId,
                 commentController: _commentController,
                 isCommenting: isCommenting,
                 onLike: () => _toggleLike(post),
@@ -317,6 +321,8 @@ class _PostDetailBody extends ConsumerWidget {
     required this.liked,
     required this.following,
     required this.likesCount,
+    required this.isOwnPost,
+    required this.currentUserId,
     required this.commentController,
     required this.isCommenting,
     required this.onLike,
@@ -329,6 +335,8 @@ class _PostDetailBody extends ConsumerWidget {
   final bool liked;
   final bool following;
   final int likesCount;
+  final bool isOwnPost;
+  final String? currentUserId;
   final TextEditingController commentController;
   final bool isCommenting;
   final VoidCallback onLike;
@@ -346,6 +354,14 @@ class _PostDetailBody extends ConsumerWidget {
     final displayName = author?.displayName ?? 'User';
     final caption = post.caption?.trim() ?? '';
     final hashtags = post.hashtags;
+
+    void openAuthor() {
+      openUserProfile(
+        context,
+        userId: post.userId,
+        currentUserId: currentUserId,
+      );
+    }
 
     return Column(
       children: [
@@ -366,50 +382,59 @@ class _PostDetailBody extends ConsumerWidget {
                     children: [
                       Row(
                         children: [
-                          ProfileAvatar(
-                            imageUrl: avatarUrl,
-                            size: 44,
-                            showBorder: false,
+                          GestureDetector(
+                            onTap: openAuthor,
+                            child: ProfileAvatar(
+                              imageUrl: avatarUrl,
+                              size: 44,
+                              showBorder: false,
+                            ),
                           ),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  displayName,
-                                  style: AppTextStyles.labelMd.copyWith(
-                                    fontWeight: FontWeight.w600,
+                            child: GestureDetector(
+                              onTap: openAuthor,
+                              behavior: HitTestBehavior.opaque,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    displayName,
+                                    style: AppTextStyles.labelMd.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Text(
-                                  formatRelativeTime(post.createdAt),
-                                  style: AppTextStyles.labelSm.copyWith(
-                                    color: AppColors.onSurfaceVariant,
+                                  Text(
+                                    formatRelativeTime(post.createdAt),
+                                    style: AppTextStyles.labelSm.copyWith(
+                                      color: AppColors.onSurfaceVariant,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          FilledButton(
-                            onPressed: onFollow,
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size(88, 36),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.sm + 4,
+                                ],
                               ),
-                              backgroundColor: following
-                                  ? AppColors.surfaceContainerHigh
-                                  : AppColors.primary,
-                              foregroundColor: following
-                                  ? AppColors.onSurface
-                                  : AppColors.onPrimary,
                             ),
-                            child: Text(following ? 'Following' : 'Follow'),
                           ),
+                          if (!isOwnPost) ...[
+                            const SizedBox(width: AppSpacing.sm),
+                            FilledButton(
+                              onPressed: onFollow,
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(88, 36),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.sm + 4,
+                                ),
+                                backgroundColor: following
+                                    ? AppColors.surfaceContainerHigh
+                                    : AppColors.primary,
+                                foregroundColor: following
+                                    ? AppColors.onSurface
+                                    : AppColors.onPrimary,
+                              ),
+                              child: Text(following ? 'Following' : 'Follow'),
+                            ),
+                          ],
                         ],
                       ),
                       if (caption.isNotEmpty) ...[

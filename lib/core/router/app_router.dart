@@ -8,7 +8,7 @@ import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/auth/presentation/screens/sign_in_screen.dart';
 import '../../features/auth/presentation/screens/sign_up_screen.dart';
 import '../../features/home/presentation/screens/home_feed_screen.dart';
-import '../../features/notification/presentation/screens/notifications_placeholder_screen.dart';
+import '../../features/notification/presentation/screens/notifications_screen.dart';
 import '../../features/post/presentation/screens/create_post_screen.dart';
 import '../../features/post/presentation/screens/post_detail_screen.dart';
 import '../../features/profile/presentation/screens/edit_profile_screen.dart';
@@ -90,8 +90,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/notifications',
                 name: 'notifications',
-                builder: (context, state) =>
-                    const NotificationsPlaceholderScreen(),
+                builder: (context, state) => const NotificationsScreen(),
               ),
             ],
           ),

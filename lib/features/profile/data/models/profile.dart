@@ -9,6 +9,7 @@ class Profile {
     this.postCount = 0,
     this.followersCount = 0,
     this.followingCount = 0,
+    this.isFollowing = false,
     this.createdAt,
     this.updatedAt,
   });
@@ -22,13 +23,17 @@ class Profile {
   final int postCount;
   final int followersCount;
   final int followingCount;
+  final bool isFollowing;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
   String get displayName =>
       (fullName != null && fullName!.trim().isNotEmpty) ? fullName! : username;
 
-  factory Profile.fromJson(Map<String, dynamic> json) {
+  factory Profile.fromJson(
+    Map<String, dynamic> json, {
+    bool isFollowing = false,
+  }) {
     return Profile(
       id: json['id'] as String,
       username: json['username'] as String? ?? '',
@@ -39,6 +44,7 @@ class Profile {
       postCount: (json['post_count'] as num?)?.toInt() ?? 0,
       followersCount: (json['followers_count'] as num?)?.toInt() ?? 0,
       followingCount: (json['following_count'] as num?)?.toInt() ?? 0,
+      isFollowing: isFollowing,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'] as String)
           : null,
@@ -74,6 +80,7 @@ class Profile {
     int? postCount,
     int? followersCount,
     int? followingCount,
+    bool? isFollowing,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -87,6 +94,7 @@ class Profile {
       postCount: postCount ?? this.postCount,
       followersCount: followersCount ?? this.followersCount,
       followingCount: followingCount ?? this.followingCount,
+      isFollowing: isFollowing ?? this.isFollowing,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

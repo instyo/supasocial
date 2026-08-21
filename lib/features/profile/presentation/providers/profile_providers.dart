@@ -21,6 +21,47 @@ final profileByIdProvider =
   return ref.watch(profileRepositoryProvider).getProfileById(userId);
 });
 
+final isFollowingProvider =
+    FutureProvider.family<bool, String>((ref, userId) {
+  return ref.watch(profileRepositoryProvider).isFollowing(userId);
+});
+
+final followControllerProvider = Provider<FollowController>((ref) {
+  return FollowController(ref);
+});
+
+class FollowController {
+  FollowController(this._ref);
+
+  final Ref _ref;
+
+  ProfileRepository get _repository => _ref.read(profileRepositoryProvider);
+
+  /// Returns the new following state on success, or null on failure.
+  Future<bool?> toggle({
+    required String userId,
+    required bool currentlyFollowing,
+  }) async {
+    try {
+      if (currentlyFollowing) {
+        await _repository.unfollowUser(userId);
+        _ref.invalidate(isFollowingProvider(userId));
+        _ref.invalidate(profileByIdProvider(userId));
+        _ref.invalidate(currentProfileProvider);
+        return false;
+      } else {
+        await _repository.followUser(userId);
+        _ref.invalidate(isFollowingProvider(userId));
+        _ref.invalidate(profileByIdProvider(userId));
+        _ref.invalidate(currentProfileProvider);
+        return true;
+      }
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
 class CurrentProfileNotifier extends AsyncNotifier<Profile?> {
   ProfileRepository get _repository => ref.read(profileRepositoryProvider);
 

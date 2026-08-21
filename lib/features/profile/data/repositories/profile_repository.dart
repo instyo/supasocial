@@ -16,5 +16,11 @@ abstract class ProfileRepository {
 
   Future<Profile> uploadAvatar(File file);
 
+  Future<bool> isFollowing(String userId);
+
+  Future<void> followUser(String userId);
+
+  Future<void> unfollowUser(String userId);
+
   String? avatarPublicUrl(String? path);
 }

@@ -11,6 +11,7 @@ class ProfileRepositoryImpl implements ProfileRepository {
   final SupabaseClient _client;
 
   static const _table = 'profiles';
+  static const _followsTable = 'follows';
   static const _avatarBucket = 'avatars';
 
   String? get _userId => _client.auth.currentUser?.id;
@@ -41,10 +42,12 @@ class ProfileRepositoryImpl implements ProfileRepository {
     try {
       final data =
           await _client.from(_table).select().eq('id', id).single();
-      return Profile.fromJson(data);
+      final following = await isFollowing(id);
+      return Profile.fromJson(data, isFollowing: following);
     } on PostgrestException catch (e) {
       throw ProfileFailure(e.message);
-    } catch (_) {
+    } catch (e) {
+      if (e is ProfileFailure) rethrow;
       throw const ProfileFailure('Failed to load profile. Please try again.');
     }
   }
@@ -129,6 +132,72 @@ class ProfileRepositoryImpl implements ProfileRepository {
     } catch (e) {
       if (e is ProfileFailure) rethrow;
       throw const ProfileFailure('Failed to upload avatar. Please try again.');
+    }
+  }
+
+  @override
+  Future<bool> isFollowing(String userId) async {
+    final me = _userId;
+    if (me == null || me == userId) return false;
+
+    try {
+      final data = await _client
+          .from(_followsTable)
+          .select('follower_id')
+          .eq('follower_id', me)
+          .eq('following_id', userId)
+          .maybeSingle();
+
+      return data != null;
+    } on PostgrestException catch (e) {
+      throw ProfileFailure(e.message);
+    } catch (_) {
+      throw const ProfileFailure('Failed to check follow status.');
+    }
+  }
+
+  @override
+  Future<void> followUser(String userId) async {
+    final me = _userId;
+    if (me == null) {
+      throw const ProfileFailure('You must be signed in to follow users.');
+    }
+    if (me == userId) {
+      throw const ProfileFailure('You cannot follow yourself.');
+    }
+
+    try {
+      await _client.from(_followsTable).insert({
+        'follower_id': me,
+        'following_id': userId,
+      });
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') return;
+      throw ProfileFailure(e.message);
+    } catch (e) {
+      if (e is ProfileFailure) rethrow;
+      throw const ProfileFailure('Failed to follow user. Please try again.');
+    }
+  }
+
+  @override
+  Future<void> unfollowUser(String userId) async {
+    final me = _userId;
+    if (me == null) {
+      throw const ProfileFailure('You must be signed in to unfollow users.');
+    }
+
+    try {
+      await _client
+          .from(_followsTable)
+          .delete()
+          .eq('follower_id', me)
+          .eq('following_id', userId);
+    } on PostgrestException catch (e) {
+      throw ProfileFailure(e.message);
+    } catch (e) {
+      if (e is ProfileFailure) rethrow;
+      throw const ProfileFailure('Failed to unfollow user. Please try again.');
     }
   }
 

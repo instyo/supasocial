@@ -29,9 +29,11 @@ class PostDetailScreen extends ConsumerStatefulWidget {
 class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   bool? _liked;
   int? _likesCount;
-  bool _following = false;
+  bool? _following;
   bool _likeBusy = false;
-  bool _seeded = false;
+  bool _followBusy = false;
+  bool _likeSeeded = false;
+  bool _followSeeded = false;
   final _commentController = TextEditingController();
 
   @override
@@ -41,10 +43,16 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
   }
 
   void _seedLikeState(Post post) {
-    if (_seeded) return;
+    if (_likeSeeded) return;
     _liked = post.isLiked;
     _likesCount = post.likesCount;
-    _seeded = true;
+    _likeSeeded = true;
+  }
+
+  void _seedFollowState(bool isFollowing) {
+    if (_followSeeded) return;
+    _following = isFollowing;
+    _followSeeded = true;
   }
 
   Future<void> _toggleLike(Post post) async {
@@ -94,6 +102,38 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     }
 
     setState(() => _likeBusy = false);
+  }
+
+  Future<void> _toggleFollow(String userId) async {
+    if (_followBusy || _following == null) return;
+
+    final previousFollowing = _following!;
+    final nextFollowing = !previousFollowing;
+
+    setState(() {
+      _followBusy = true;
+      _following = nextFollowing;
+    });
+
+    final result = await ref.read(followControllerProvider).toggle(
+          userId: userId,
+          currentlyFollowing: previousFollowing,
+        );
+
+    if (!mounted) return;
+
+    if (result == null) {
+      setState(() {
+        _following = previousFollowing;
+        _followBusy = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not update follow. Try again.')),
+      );
+      return;
+    }
+
+    setState(() => _followBusy = false);
   }
 
   void _showPostActions(Post post) {
@@ -277,24 +317,39 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
               ),
             ),
             data: (post) {
-              if (!_seeded) {
+              final isOwnPost = currentUserId != null &&
+                  post.userId == currentUserId;
+
+              if (!_likeSeeded) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!mounted || _seeded) return;
+                  if (!mounted || _likeSeeded) return;
                   setState(() => _seedLikeState(post));
                 });
               }
+
+              if (!isOwnPost && !_followSeeded) {
+                final followAsync =
+                    ref.watch(isFollowingProvider(post.userId));
+                followAsync.whenData((isFollowing) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted || _followSeeded) return;
+                    setState(() => _seedFollowState(isFollowing));
+                  });
+                });
+              }
+
               return _PostDetailBody(
                 post: post,
                 liked: _liked ?? post.isLiked,
-                following: _following,
+                following: _following ?? false,
                 likesCount: _likesCount ?? post.likesCount,
-                isOwnPost: currentUserId != null &&
-                    post.userId == currentUserId,
+                isOwnPost: isOwnPost,
                 currentUserId: currentUserId,
                 commentController: _commentController,
                 isCommenting: isCommenting,
+                followBusy: _followBusy,
                 onLike: () => _toggleLike(post),
-                onFollow: () => setState(() => _following = !_following),
+                onFollow: () => _toggleFollow(post.userId),
                 onShare: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Share coming soon')),
@@ -325,6 +380,7 @@ class _PostDetailBody extends ConsumerWidget {
     required this.currentUserId,
     required this.commentController,
     required this.isCommenting,
+    required this.followBusy,
     required this.onLike,
     required this.onFollow,
     required this.onShare,
@@ -339,6 +395,7 @@ class _PostDetailBody extends ConsumerWidget {
   final String? currentUserId;
   final TextEditingController commentController;
   final bool isCommenting;
+  final bool followBusy;
   final VoidCallback onLike;
   final VoidCallback onFollow;
   final VoidCallback onShare;
@@ -419,7 +476,7 @@ class _PostDetailBody extends ConsumerWidget {
                           if (!isOwnPost) ...[
                             const SizedBox(width: AppSpacing.sm),
                             FilledButton(
-                              onPressed: onFollow,
+                              onPressed: followBusy ? null : onFollow,
                               style: FilledButton.styleFrom(
                                 minimumSize: const Size(88, 36),
                                 padding: const EdgeInsets.symmetric(
@@ -431,6 +488,9 @@ class _PostDetailBody extends ConsumerWidget {
                                 foregroundColor: following
                                     ? AppColors.onSurface
                                     : AppColors.onPrimary,
+                                disabledBackgroundColor: following
+                                    ? AppColors.surfaceContainerHigh
+                                    : AppColors.primary.withValues(alpha: 0.5),
                               ),
                               child: Text(following ? 'Following' : 'Follow'),
                             ),

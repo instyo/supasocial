@@ -32,6 +32,7 @@ class Post {
     this.caption,
     this.likesCount = 0,
     this.commentsCount = 0,
+    this.isLiked = false,
     this.createdAt,
     this.updatedAt,
     this.author,
@@ -43,6 +44,7 @@ class Post {
   final String imagePath;
   final int likesCount;
   final int commentsCount;
+  final bool isLiked;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final PostAuthor? author;
@@ -53,7 +55,7 @@ class Post {
     return matches.map((m) => '#${m.group(1)}').toList();
   }
 
-  factory Post.fromJson(Map<String, dynamic> json) {
+  factory Post.fromJson(Map<String, dynamic> json, {bool isLiked = false}) {
     PostAuthor? author;
     final profiles = json['profiles'];
     if (profiles is Map<String, dynamic>) {
@@ -67,6 +69,7 @@ class Post {
       imagePath: json['image_path'] as String? ?? '',
       likesCount: (json['likes_count'] as num?)?.toInt() ?? 0,
       commentsCount: (json['comments_count'] as num?)?.toInt() ?? 0,
+      isLiked: isLiked,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'] as String)
           : null,
@@ -84,6 +87,7 @@ class Post {
     String? imagePath,
     int? likesCount,
     int? commentsCount,
+    bool? isLiked,
     DateTime? createdAt,
     DateTime? updatedAt,
     PostAuthor? author,
@@ -95,6 +99,7 @@ class Post {
       imagePath: imagePath ?? this.imagePath,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
+      isLiked: isLiked ?? this.isLiked,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       author: author ?? this.author,

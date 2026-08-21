@@ -11,11 +11,43 @@ class PostRepositoryImpl implements PostRepository {
   final SupabaseClient _client;
 
   static const _table = 'posts';
+  static const _likesTable = 'post_likes';
   static const _bucket = 'posts';
   static const _selectWithAuthor =
       '*, profiles:user_id(id, username, full_name, avatar_url)';
 
   String? get _userId => _client.auth.currentUser?.id;
+
+  Future<Set<String>> _likedPostIds(List<String> postIds) async {
+    final userId = _userId;
+    if (userId == null || postIds.isEmpty) return {};
+
+    final data = await _client
+        .from(_likesTable)
+        .select('post_id')
+        .eq('user_id', userId)
+        .inFilter('post_id', postIds);
+
+    return (data as List<dynamic>)
+        .map((row) => (row as Map<String, dynamic>)['post_id'] as String)
+        .toSet();
+  }
+
+  Future<List<Post>> _mapPostsWithLikes(List<dynamic> rows) async {
+    final posts = rows
+        .map((row) => Post.fromJson(row as Map<String, dynamic>))
+        .toList();
+    final likedIds = await _likedPostIds(posts.map((p) => p.id).toList());
+    return posts
+        .map((post) => post.copyWith(isLiked: likedIds.contains(post.id)))
+        .toList();
+  }
+
+  Future<Post> _mapPostWithLike(Map<String, dynamic> row) async {
+    final post = Post.fromJson(row);
+    final likedIds = await _likedPostIds([post.id]);
+    return post.copyWith(isLiked: likedIds.contains(post.id));
+  }
 
   @override
   Future<List<Post>> getFeed() async {
@@ -25,9 +57,7 @@ class PostRepositoryImpl implements PostRepository {
           .select(_selectWithAuthor)
           .order('created_at', ascending: false);
 
-      return (data as List<dynamic>)
-          .map((row) => Post.fromJson(row as Map<String, dynamic>))
-          .toList();
+      return _mapPostsWithLikes(data as List<dynamic>);
     } on PostgrestException catch (e) {
       throw PostFailure(e.message);
     } catch (_) {
@@ -44,9 +74,7 @@ class PostRepositoryImpl implements PostRepository {
           .eq('user_id', userId)
           .order('created_at', ascending: false);
 
-      return (data as List<dynamic>)
-          .map((row) => Post.fromJson(row as Map<String, dynamic>))
-          .toList();
+      return _mapPostsWithLikes(data as List<dynamic>);
     } on PostgrestException catch (e) {
       throw PostFailure(e.message);
     } catch (_) {
@@ -63,7 +91,7 @@ class PostRepositoryImpl implements PostRepository {
           .eq('id', id)
           .single();
 
-      return Post.fromJson(data);
+      return _mapPostWithLike(data);
     } on PostgrestException catch (e) {
       throw PostFailure(e.message);
     } catch (_) {
@@ -81,8 +109,7 @@ class PostRepositoryImpl implements PostRepository {
       throw const PostFailure('You must be signed in to create a post.');
     }
 
-    final path =
-        '$userId/${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final path = '$userId/${DateTime.now().millisecondsSinceEpoch}.jpg';
 
     try {
       await _client.storage.from(_bucket).upload(
@@ -105,7 +132,7 @@ class PostRepositoryImpl implements PostRepository {
           .select(_selectWithAuthor)
           .single();
 
-      return Post.fromJson(data);
+      return Post.fromJson(data, isLiked: false);
     } on StorageException catch (e) {
       throw PostFailure(e.message);
     } on PostgrestException catch (e) {
@@ -137,11 +164,7 @@ class PostRepositoryImpl implements PostRepository {
 
       final imagePath = row['image_path'] as String? ?? '';
 
-      await _client
-          .from(_table)
-          .delete()
-          .eq('id', id)
-          .eq('user_id', userId);
+      await _client.from(_table).delete().eq('id', id).eq('user_id', userId);
 
       if (imagePath.isNotEmpty) {
         try {
@@ -155,6 +178,49 @@ class PostRepositoryImpl implements PostRepository {
     } catch (e) {
       if (e is PostFailure) rethrow;
       throw const PostFailure('Failed to delete post. Please try again.');
+    }
+  }
+
+  @override
+  Future<void> likePost(String postId) async {
+    final userId = _userId;
+    if (userId == null) {
+      throw const PostFailure('You must be signed in to like a post.');
+    }
+
+    try {
+      await _client.from(_likesTable).insert({
+        'post_id': postId,
+        'user_id': userId,
+      });
+    } on PostgrestException catch (e) {
+      // Already liked — treat as success.
+      if (e.code == '23505') return;
+      throw PostFailure(e.message);
+    } catch (e) {
+      if (e is PostFailure) rethrow;
+      throw const PostFailure('Failed to like post. Please try again.');
+    }
+  }
+
+  @override
+  Future<void> unlikePost(String postId) async {
+    final userId = _userId;
+    if (userId == null) {
+      throw const PostFailure('You must be signed in to unlike a post.');
+    }
+
+    try {
+      await _client
+          .from(_likesTable)
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', userId);
+    } on PostgrestException catch (e) {
+      throw PostFailure(e.message);
+    } catch (e) {
+      if (e is PostFailure) rethrow;
+      throw const PostFailure('Failed to unlike post. Please try again.');
     }
   }
 

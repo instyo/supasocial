@@ -27,6 +27,53 @@ class FeedNotifier extends AsyncNotifier<List<Post>> {
     state = const AsyncLoading();
     state = await AsyncValue.guard(_repository.getFeed);
   }
+
+  void patchLike({
+    required String postId,
+    required bool isLiked,
+    required int likesCount,
+  }) {
+    final current = state.asData?.value;
+    if (current == null) return;
+
+    state = AsyncData([
+      for (final post in current)
+        if (post.id == postId)
+          post.copyWith(isLiked: isLiked, likesCount: likesCount)
+        else
+          post,
+    ]);
+  }
+}
+
+final postLikeControllerProvider = Provider<PostLikeController>((ref) {
+  return PostLikeController(ref);
+});
+
+class PostLikeController {
+  PostLikeController(this._ref);
+
+  final Ref _ref;
+
+  PostRepository get _repository => _ref.read(postRepositoryProvider);
+
+  /// Returns the new liked state on success, or null on failure.
+  Future<bool?> toggle({
+    required String postId,
+    required bool currentlyLiked,
+  }) async {
+    try {
+      if (currentlyLiked) {
+        await _repository.unlikePost(postId);
+        return false;
+      } else {
+        await _repository.likePost(postId);
+        return true;
+      }
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 final userPostsProvider =

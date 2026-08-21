@@ -16,5 +16,9 @@ abstract class PostRepository {
 
   Future<void> deletePost(String id);
 
+  Future<void> likePost(String postId);
+
+  Future<void> unlikePost(String postId);
+
   String imagePublicUrl(String path);
 }

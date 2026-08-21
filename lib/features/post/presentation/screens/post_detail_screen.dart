@@ -26,9 +26,11 @@ class PostDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
-  bool _liked = false;
+  bool? _liked;
+  int? _likesCount;
   bool _following = false;
-  int _likesDelta = 0;
+  bool _likeBusy = false;
+  bool _seeded = false;
   final _commentController = TextEditingController();
 
   @override
@@ -37,16 +39,60 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
     super.dispose();
   }
 
-  void _toggleLike() {
+  void _seedLikeState(Post post) {
+    if (_seeded) return;
+    _liked = post.isLiked;
+    _likesCount = post.likesCount;
+    _seeded = true;
+  }
+
+  Future<void> _toggleLike(Post post) async {
+    if (_likeBusy) return;
+
+    final previousLiked = _liked ?? post.isLiked;
+    final previousCount = _likesCount ?? post.likesCount;
+    final nextLiked = !previousLiked;
+    final nextCount = nextLiked
+        ? previousCount + 1
+        : (previousCount - 1).clamp(0, 1 << 30);
+
     setState(() {
-      if (_liked) {
-        _liked = false;
-        _likesDelta -= 1;
-      } else {
-        _liked = true;
-        _likesDelta += 1;
-      }
+      _likeBusy = true;
+      _liked = nextLiked;
+      _likesCount = nextCount;
     });
+
+    ref.read(feedNotifierProvider.notifier).patchLike(
+          postId: post.id,
+          isLiked: nextLiked,
+          likesCount: nextCount,
+        );
+
+    final result = await ref.read(postLikeControllerProvider).toggle(
+          postId: post.id,
+          currentlyLiked: previousLiked,
+        );
+
+    if (!mounted) return;
+
+    if (result == null) {
+      setState(() {
+        _liked = previousLiked;
+        _likesCount = previousCount;
+        _likeBusy = false;
+      });
+      ref.read(feedNotifierProvider.notifier).patchLike(
+            postId: post.id,
+            isLiked: previousLiked,
+            likesCount: previousCount,
+          );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not update like. Try again.')),
+      );
+      return;
+    }
+
+    setState(() => _likeBusy = false);
   }
 
   void _showPostActions(Post post) {
@@ -206,15 +252,19 @@ class _PostDetailScreenState extends ConsumerState<PostDetailScreen> {
               ),
             ),
             data: (post) {
-              final likesCount =
-                  (post.likesCount + _likesDelta).clamp(0, 1 << 30);
+              if (!_seeded) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted || _seeded) return;
+                  setState(() => _seedLikeState(post));
+                });
+              }
               return _PostDetailBody(
                 post: post,
-                liked: _liked,
+                liked: _liked ?? post.isLiked,
                 following: _following,
-                likesCount: likesCount,
+                likesCount: _likesCount ?? post.likesCount,
                 commentController: _commentController,
-                onLike: _toggleLike,
+                onLike: () => _toggleLike(post),
                 onFollow: () => setState(() => _following = !_following),
                 onShare: () {
                   ScaffoldMessenger.of(context).showSnackBar(

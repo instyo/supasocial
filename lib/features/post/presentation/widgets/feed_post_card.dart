@@ -28,11 +28,12 @@ class _FeedPostCardState extends ConsumerState<FeedPostCard> {
   late bool _liked;
   late bool _bookmarked;
   late int _likesCount;
+  bool _likeBusy = false;
 
   @override
   void initState() {
     super.initState();
-    _liked = false;
+    _liked = widget.post.isLiked;
     _bookmarked = false;
     _likesCount = widget.post.likesCount;
   }
@@ -41,23 +42,60 @@ class _FeedPostCardState extends ConsumerState<FeedPostCard> {
   void didUpdateWidget(covariant FeedPostCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.post.id != widget.post.id ||
+        oldWidget.post.isLiked != widget.post.isLiked ||
         oldWidget.post.likesCount != widget.post.likesCount) {
+      _liked = widget.post.isLiked;
       _likesCount = widget.post.likesCount;
-      _liked = false;
-      _bookmarked = false;
     }
   }
 
-  void _toggleLike() {
+  Future<void> _toggleLike() async {
+    if (_likeBusy) return;
+
+    final previousLiked = _liked;
+    final previousCount = _likesCount;
+    final nextLiked = !_liked;
+    final nextCount = nextLiked
+        ? _likesCount + 1
+        : (_likesCount - 1).clamp(0, 1 << 30);
+
     setState(() {
-      if (_liked) {
-        _liked = false;
-        _likesCount = (_likesCount - 1).clamp(0, 1 << 30);
-      } else {
-        _liked = true;
-        _likesCount += 1;
-      }
+      _likeBusy = true;
+      _liked = nextLiked;
+      _likesCount = nextCount;
     });
+
+    ref.read(feedNotifierProvider.notifier).patchLike(
+          postId: widget.post.id,
+          isLiked: nextLiked,
+          likesCount: nextCount,
+        );
+
+    final result = await ref.read(postLikeControllerProvider).toggle(
+          postId: widget.post.id,
+          currentlyLiked: previousLiked,
+        );
+
+    if (!mounted) return;
+
+    if (result == null) {
+      setState(() {
+        _liked = previousLiked;
+        _likesCount = previousCount;
+        _likeBusy = false;
+      });
+      ref.read(feedNotifierProvider.notifier).patchLike(
+            postId: widget.post.id,
+            isLiked: previousLiked,
+            likesCount: previousCount,
+          );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not update like. Try again.')),
+      );
+      return;
+    }
+
+    setState(() => _likeBusy = false);
   }
 
   void _toggleBookmark() {

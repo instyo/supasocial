@@ -13,9 +13,17 @@ class HomePlaceholderScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authRepositoryProvider).currentUser;
     final name = user?.userMetadata?['full_name'] as String? ?? 'there';
-    final email = user?.email ?? '';
 
     return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Aura',
+          style: AppTextStyles.headlineMd.copyWith(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.marginMobile),
@@ -34,14 +42,6 @@ class HomePlaceholderScreen extends ConsumerWidget {
                 style: AppTextStyles.headlineLgMobile,
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                email,
-                style: AppTextStyles.bodyMd.copyWith(
-                  color: AppColors.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-              ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 "You're signed in. Feed coming soon.",
@@ -51,19 +51,6 @@ class HomePlaceholderScreen extends ConsumerWidget {
                 textAlign: TextAlign.center,
               ),
               const Spacer(),
-              OutlinedButton(
-                onPressed: () {
-                  ref.read(authControllerProvider.notifier).signOut();
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.outlineVariant),
-                  minimumSize: const Size(double.infinity, 52),
-                  shape: const StadiumBorder(),
-                ),
-                child: const Text('Sign Out'),
-              ),
-              const SizedBox(height: AppSpacing.md),
             ],
           ),
         ),

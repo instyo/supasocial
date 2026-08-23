@@ -18,7 +18,7 @@ class HomeFeedScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Aura',
+          'Home',
           style: AppTextStyles.headlineMd.copyWith(
             color: AppColors.primary,
             fontWeight: FontWeight.w700,
@@ -99,8 +99,7 @@ class HomeFeedScreen extends ConsumerWidget {
           }
 
           return RefreshIndicator(
-            onRefresh: () =>
-                ref.read(feedNotifierProvider.notifier).refresh(),
+            onRefresh: () => ref.read(feedNotifierProvider.notifier).refresh(),
             child: ListView.separated(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(

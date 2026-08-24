@@ -5,6 +5,11 @@ Built with **Flutter** and **Supabase** (Auth, Database, Storage).
 
 Users can sign up, create photo posts, follow others, like, comment, bookmark-style profile grids, and receive notifications.
 
+|Home|Notification|Profile|New Post|Post Detail|Edit Profile|Sign In|Sign Up|
+|------|------|------|------|------|------|------|------|
+|<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2026-08-23 at 12 40 00" src="https://github.com/user-attachments/assets/90e4b660-937a-4839-bf71-18b392fd2780" />|<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2026-08-23 at 12 52 20" src="https://github.com/user-attachments/assets/33beef76-a329-47dd-b9b4-8dfef22fd98d" />|<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2026-08-23 at 12 52 33" src="https://github.com/user-attachments/assets/4ad7e531-81ec-4aac-80ff-7354bf1b0812" />|<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2026-08-23 at 12 53 03" src="https://github.com/user-attachments/assets/960298a8-dda5-49ba-abfc-4a2866612564" />|<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2026-08-23 at 12 53 17" src="https://github.com/user-attachments/assets/73dd62a2-ef21-498d-8b54-1b3087d730d7" />|<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2026-08-23 at 12 53 25" src="https://github.com/user-attachments/assets/0486a8de-f53f-4b45-8740-a183f1dd786d" />|<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2026-08-23 at 12 53 38" src="https://github.com/user-attachments/assets/2a12fe8d-afbd-4f10-a067-46393f5ba412" />|<img width="1206" height="2622" alt="Simulator Screenshot - iPhone 17 - 2026-08-23 at 12 53 54" src="https://github.com/user-attachments/assets/981f3a60-507d-47f1-abec-89b65a9955a3" />|
+
+
 ---
 
 ## Features

@@ -59,17 +59,20 @@ class SocialAuthButtons extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _SocialButton(
-              label: 'G',
+              assetPath: 'assets/images/google.png',
+              semanticLabel: 'Sign in with Google',
               onTap: isLoading ? null : () => _onGoogle(context, ref),
             ),
             const SizedBox(width: AppSpacing.sm + 4),
             _SocialButton(
-              label: 'A',
+              assetPath: 'assets/images/apple.png',
+              semanticLabel: 'Sign in with Apple',
               onTap: isLoading ? null : () => _showComingSoon(context),
             ),
             const SizedBox(width: AppSpacing.sm + 4),
             _SocialButton(
-              label: 'F',
+              assetPath: 'assets/images/facebook.png',
+              semanticLabel: 'Sign in with Facebook',
               onTap: isLoading ? null : () => _showComingSoon(context),
             ),
           ],
@@ -81,15 +84,19 @@ class SocialAuthButtons extends ConsumerWidget {
 
 class _SocialButton extends StatelessWidget {
   const _SocialButton({
-    required this.label,
+    required this.assetPath,
+    required this.semanticLabel,
     required this.onTap,
   });
 
-  final String label;
+  final String assetPath;
+  final String semanticLabel;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final enabled = onTap != null;
+
     return Material(
       color: AppColors.socialButtonBg,
       shape: const CircleBorder(),
@@ -100,13 +107,14 @@ class _SocialButton extends StatelessWidget {
           width: 48,
           height: 48,
           child: Center(
-            child: Text(
-              label,
-              style: AppTextStyles.labelMd.copyWith(
-                color: onTap == null
-                    ? AppColors.onSurfaceVariant
-                    : AppColors.primary,
-                fontWeight: FontWeight.w600,
+            child: Opacity(
+              opacity: enabled ? 1 : 0.4,
+              child: Image.asset(
+                assetPath,
+                width: 22,
+                height: 22,
+                fit: BoxFit.contain,
+                semanticLabel: semanticLabel,
               ),
             ),
           ),

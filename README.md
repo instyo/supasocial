@@ -27,6 +27,7 @@ Users can sign up, create photo posts, follow others, like, comment, bookmark-st
 - **go_router** — navigation + auth redirects
 - **cached_network_image** — image caching
 - **image_picker** — camera / gallery
+- **google_sign_in** — native Google Sign-In (ID token → Supabase)
 - **google_fonts** — Inter typography
 
 Architecture: **feature-first** + **repository pattern**. UI never talks to Supabase directly.
@@ -40,7 +41,8 @@ Install:
 1. [Flutter](https://docs.flutter.dev/get-started/install) (stable)
 2. [Supabase CLI](https://supabase.com/docs/guides/cli)
 3. A [Supabase](https://supabase.com) account / project
-4. Xcode (iOS) and/or Android Studio (Android), if running on devices/simulators
+4. A [Google Cloud](https://console.cloud.google.com/) project (for Google Sign-In)
+5. Xcode (iOS) and/or Android Studio (Android), if running on devices/simulators
 
 Check Flutter:
 
@@ -106,14 +108,16 @@ In **Storage** → **New bucket**:
 
 If policies were already applied by migration, you only need the buckets. If you create buckets first and policies fail on push, re-run push or add policies from the migration file.
 
-### 5. Auth settings
+### 5. Auth settings (email)
 
 In **Authentication** → **Providers**:
 
 - Enable **Email**
 - For local/dev, you can disable “Confirm email” so sign-up works immediately
 
-A trigger (`handle_new_user`) creates a row in `public.profiles` when a user signs up.
+A trigger (`handle_new_user`) creates a row in `public.profiles` when a user signs up (email **or** Google).
+
+For Google, continue with the section below.
 
 ### 6. Run the app
 
@@ -122,7 +126,8 @@ Credentials are injected at compile time via `--dart-define` (see `lib/core/cons
 ```bash
 flutter run \
   --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \
-  --dart-define=SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+  --dart-define=SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY \
+  --dart-define=GOOGLE_WEB_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
 ```
 
 **iOS simulator:**
@@ -130,18 +135,192 @@ flutter run \
 ```bash
 flutter run -d iPhone \
   --dart-define=SUPABASE_URL=... \
-  --dart-define=SUPABASE_ANON_KEY=...
+  --dart-define=SUPABASE_ANON_KEY=... \
+  --dart-define=GOOGLE_WEB_CLIENT_ID=...
 ```
 
-**Android emulator:**
+**Android emulator / device:**
 
 ```bash
 flutter run -d emulator-5554 \
   --dart-define=SUPABASE_URL=... \
-  --dart-define=SUPABASE_ANON_KEY=...
+  --dart-define=SUPABASE_ANON_KEY=... \
+  --dart-define=GOOGLE_WEB_CLIENT_ID=...
 ```
 
-Do **not** commit real keys. Prefer local shell aliases, IDE run configs, or a private `.env` script that is gitignored.
+Do **not** commit real keys. Prefer local shell aliases, IDE run configs, or a private script that is gitignored.
+
+---
+
+## Google Sign-In setup
+
+The app uses **native** Google Sign-In (`google_sign_in`) and exchanges the Google **ID token** with Supabase via `signInWithIdToken`.  
+No browser OAuth flow and no deep-link redirect URL are required for mobile.
+
+### Overview
+
+| Piece | Role |
+|-------|------|
+| **Web OAuth client** | Client ID + secret → Supabase Google provider; Client ID → app as `GOOGLE_WEB_CLIENT_ID` (`serverClientId`) |
+| **iOS OAuth client** | Bundle ID + reversed client ID URL scheme in `Info.plist` |
+| **Android OAuth client** | Package name + **SHA-1** of the keystore that signs the app |
+
+### A. Google Cloud — project and consent
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) and create (or select) a project.
+2. Go to **APIs & Services** → **OAuth consent screen** (or **Google Auth Platform** → **Audience** / **Branding**, depending on the console UI).
+3. Configure the app name and support email. For development, **External** + test users is fine.
+4. Under **Data Access / Scopes**, ensure at least:
+   - `openid`
+   - `.../auth/userinfo.email`
+   - `.../auth/userinfo.profile`
+
+### B. Create OAuth clients
+
+Go to **APIs & Services** → **Credentials** → **Create credentials** → **OAuth client ID** (or **Google Auth Platform** → **Clients**).
+
+#### 1. Web application (required)
+
+1. Application type: **Web application**
+2. Name: e.g. `Aura Web`
+3. You can leave origins/redirects empty for the native mobile ID-token flow, **or** add Supabase’s callback if you also use web OAuth later:
+   - `https://YOUR_PROJECT.supabase.co/auth/v1/callback`
+4. Create and save:
+   - **Client ID** → this is `GOOGLE_WEB_CLIENT_ID`
+   - **Client secret** → only for Supabase Dashboard (never put the secret in the Flutter app)
+
+#### 2. iOS (required for iOS devices / simulator)
+
+1. Application type: **iOS**
+2. Bundle ID: `com.ikhwan.supasocial` (must match Xcode / `ios/Runner`)
+3. Create and save the **iOS Client ID**  
+   Format: `xxxxx.apps.googleusercontent.com`
+4. Derive the **reversed client ID** for URL schemes:  
+   `com.googleusercontent.apps.xxxxx`  
+   (swap the prefix; drop `.apps.googleusercontent.com` from the end and use it after `com.googleusercontent.apps.`)
+
+Example:
+
+| Field | Value |
+|-------|--------|
+| iOS Client ID | `123456789-abcdef.apps.googleusercontent.com` |
+| Reversed client ID | `com.googleusercontent.apps.123456789-abcdef` |
+
+#### 3. Android (required for Android emulators / devices)
+
+1. Application type: **Android**
+2. Package name: `com.ikhwan.supasocial`
+3. **SHA-1 certificate fingerprint** — must match the keystore Gradle uses (see next step)
+4. Create the client (Android clients have no secret)
+
+You need a separate Android client (or additional SHA-1 entries) for each signing key (debug vs Play App Signing release).
+
+### C. Android SHA-1 (this repo)
+
+Debug builds are signed with the **project** keystore at the repo root:
+
+```
+debug.keystore
+```
+
+This is wired in `android/app/build.gradle.kts` (not the machine default `~/.android/debug.keystore`).
+
+**Get the SHA-1:**
+
+```bash
+# From repo root
+keytool -list -v \
+  -keystore debug.keystore \
+  -alias androiddebugkey \
+  -storepass android \
+  -keypass android
+```
+
+Or:
+
+```bash
+cd android && ./gradlew :app:signingReport
+```
+
+Look for **SHA1** under the `debug` variant. Paste that value into the Android OAuth client in Google Cloud.
+
+If SHA-1 in Google Cloud does not match the keystore that signed the APK/AAB, Google Sign-In fails with errors like:
+
+```text
+GoogleSignInExceptionCode.canceled, [16] Account reauth failed
+```
+
+### D. Supabase — enable Google provider
+
+1. Supabase Dashboard → **Authentication** → **Providers** → **Google**
+2. **Enable** Google
+3. **Client ID** = Web client ID (from step B.1)
+4. **Client Secret** = Web client secret (from step B.1)
+5. (Optional) Additional Client IDs: paste iOS and/or Android client IDs, comma-separated
+6. Turn **Skip nonce check** **ON** (needed for native iOS Google Sign-In with this stack)
+7. Save
+
+Profile rows are still created by `handle_new_user` on first Google sign-in (username defaults to `user_<8 chars of uuid>` unless metadata provides one).
+
+### E. iOS URL scheme
+
+`ios/Runner/Info.plist` must register the **reversed iOS client ID** under `CFBundleURLTypes` → `CFBundleURLSchemes`.
+
+This repo already includes a scheme for the project’s iOS client. If you create **your own** iOS OAuth client, replace that string with your reversed client ID.
+
+Optional: pass your iOS client ID at runtime (defaults exist in `Env` for this project):
+
+```bash
+--dart-define=GOOGLE_IOS_CLIENT_ID=YOUR_IOS_CLIENT_ID.apps.googleusercontent.com
+```
+
+### F. App dart-defines
+
+| Define | Required | Description |
+|--------|----------|-------------|
+| `SUPABASE_URL` | Yes | Supabase project URL |
+| `SUPABASE_ANON_KEY` | Yes | Supabase anon (public) key |
+| `GOOGLE_WEB_CLIENT_ID` | Yes (for Google) | **Web** OAuth client ID (`serverClientId`) |
+| `GOOGLE_IOS_CLIENT_ID` | iOS only | iOS OAuth client ID; has a project default in `Env` |
+
+Example:
+
+```bash
+flutter run \
+  --dart-define=SUPABASE_URL=https://xxxx.supabase.co \
+  --dart-define=SUPABASE_ANON_KEY=eyJhbGciOi... \
+  --dart-define=GOOGLE_WEB_CLIENT_ID=123456789-xyz.apps.googleusercontent.com \
+  --dart-define=GOOGLE_IOS_CLIENT_ID=123456789-ios.apps.googleusercontent.com
+```
+
+### G. How it works in code
+
+1. User taps **G** on sign-in / sign-up  
+2. `AuthRepository.signInWithGoogle()` initializes `GoogleSignIn` with `serverClientId` = Web client ID  
+3. Native Google UI returns an **ID token** (+ access token for scopes)  
+4. App calls Supabase `signInWithIdToken(provider: google, ...)`  
+5. `go_router` sees a session and redirects to `/home`  
+6. On sign-out, both Google and Supabase sessions are cleared  
+
+Implementation lives in:
+
+- `lib/features/auth/data/repositories/auth_repository_impl.dart`
+- `lib/features/auth/presentation/widgets/social_auth_buttons.dart`
+- `lib/core/constants/env.dart`
+
+### H. Checklist
+
+- [ ] Web OAuth client created; ID + secret saved  
+- [ ] Web client ID + secret entered in Supabase Google provider  
+- [ ] Skip nonce check enabled in Supabase  
+- [ ] iOS OAuth client with bundle `com.ikhwan.supasocial`  
+- [ ] `Info.plist` reversed client ID matches that iOS client  
+- [ ] Android OAuth client with package `com.ikhwan.supasocial`  
+- [ ] Android SHA-1 from **this repo’s** `debug.keystore` registered  
+- [ ] App run with `GOOGLE_WEB_CLIENT_ID` set  
+- [ ] Cold start → tap G → account picker → lands on Home  
+
+After changing OAuth clients or SHA-1 in Google Cloud, wait a few minutes and do a full app restart (`flutter run` again).
 
 ---
 
@@ -178,7 +357,7 @@ supabase db push
 
 - Prefer one meaningful migration per change set; avoid committing empty migration files.
 - Counters (`likes_count`, `followers_count`, `post_count`, etc.) are maintained by **database triggers**, not the Flutter client.
-- Store **storage paths** in the DB (`image_path`, `avatar_url`), not full public URLs. The app builds public URLs with the Supabase client.
+- Store **storage paths** in the DB (`image_path`, `avatar_url`), not full public URLs. The app builds public URLs with the Supabase client. Google avatar URLs (full `https://…`) are also supported when present.
 - Always keep **RLS** enabled (already on for all app tables).
 
 ---
@@ -240,6 +419,8 @@ lib/
 
 supabase/
 └── migrations/             # SQL from `supabase db pull` / schema history
+
+debug.keystore              # Shared Android debug signing (SHA-1 for Google)
 ```
 
 Typical feature layout:
@@ -293,6 +474,9 @@ flutter test
 
 # Format
 dart format .
+
+# Android signing / SHA-1
+cd android && ./gradlew :app:signingReport
 ```
 
 ### IDE run configuration
@@ -312,7 +496,8 @@ Add dart-defines so you don’t type them every time:
       "program": "lib/main.dart",
       "toolArgs": [
         "--dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co",
-        "--dart-define=SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY"
+        "--dart-define=SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY",
+        "--dart-define=GOOGLE_WEB_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"
       ]
     }
   ]
@@ -329,8 +514,10 @@ Keep this file out of git or use placeholders if you share the repo.
 |--------|-------------|
 | `SUPABASE_URL` | Project URL (`https://xxxx.supabase.co`) |
 | `SUPABASE_ANON_KEY` | Public anon key (safe for client with RLS) |
+| `GOOGLE_WEB_CLIENT_ID` | Google **Web** OAuth client ID (required for Google Sign-In) |
+| `GOOGLE_IOS_CLIENT_ID` | Google **iOS** OAuth client ID (optional; defaults in `Env` for this project) |
 
-Never ship the **service_role** key in the Flutter app.
+Never ship the **service_role** key or the Google **client secret** in the Flutter app.
 
 ---
 
@@ -344,6 +531,12 @@ Never ship the **service_role** key in the Flutter app.
 | Empty feed | Create a second user + posts, or seed data manually in SQL Editor |
 | `db push` fails on empty migration | Delete zero-byte files in `supabase/migrations/` |
 | RLS errors in logs | User must be authenticated; policies require `auth.uid()` ownership where applicable |
+| Snackbar: Google Sign-In is not configured | Pass `--dart-define=GOOGLE_WEB_CLIENT_ID=...` |
+| `[16] Account reauth failed` on Android | SHA-1 mismatch. Use `debug.keystore` SHA-1 from this repo (`signingReport`) and register it on the **Android** OAuth client. Package must be `com.ikhwan.supasocial`. |
+| Google works on iOS, fails on Android | Android OAuth client + correct SHA-1; rebuild after Gradle signing change |
+| Google works on Android, fails on iOS | Reversed client ID in `Info.plist`; `GOOGLE_IOS_CLIENT_ID`; Supabase **Skip nonce check** ON |
+| User cancels Google sheet | Expected — no error snackbar |
+| Still failing after Cloud changes | Wait a few minutes; uninstall app / full restart; confirm Web client ID is used as `serverClientId` |
 
 ---
 
@@ -352,7 +545,9 @@ Never ship the **service_role** key in the Flutter app.
 - RLS is enabled on all public tables.  
 - Counters are trigger-owned — don’t trust client-side count writes.  
 - Anon key is public by design; security lives in RLS + storage policies.  
-- Prefer confirming email in production.
+- Prefer confirming email in production.  
+- Only the Google **Web client ID** belongs in the app; keep the **client secret** in Supabase only.  
+- Don’t commit real dart-define values, keystores with production keys, or `google-services.json` with secrets if you add one later.
 
 ---
 

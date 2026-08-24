@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../providers/auth_providers.dart';
 
-class SocialAuthButtons extends StatelessWidget {
+class SocialAuthButtons extends ConsumerWidget {
   const SocialAuthButtons({super.key});
 
   void _showComingSoon(BuildContext context) {
@@ -14,8 +16,27 @@ class SocialAuthButtons extends StatelessWidget {
     );
   }
 
+  Future<void> _onGoogle(BuildContext context, WidgetRef ref) async {
+    final result =
+        await ref.read(authControllerProvider.notifier).signInWithGoogle();
+
+    if (!context.mounted || result == true || result == null) return;
+
+    final error = ref.read(authControllerProvider).error;
+    final message = error is Exception
+        ? error.toString().replaceFirst('Exception: ', '')
+        : 'Google sign-in failed. Please try again.';
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isLoading = ref.watch(authControllerProvider).isLoading;
+
     return Column(
       children: [
         Row(
@@ -39,17 +60,17 @@ class SocialAuthButtons extends StatelessWidget {
           children: [
             _SocialButton(
               label: 'G',
-              onTap: () => _showComingSoon(context),
+              onTap: isLoading ? null : () => _onGoogle(context, ref),
             ),
             const SizedBox(width: AppSpacing.sm + 4),
             _SocialButton(
               label: 'A',
-              onTap: () => _showComingSoon(context),
+              onTap: isLoading ? null : () => _showComingSoon(context),
             ),
             const SizedBox(width: AppSpacing.sm + 4),
             _SocialButton(
               label: 'F',
-              onTap: () => _showComingSoon(context),
+              onTap: isLoading ? null : () => _showComingSoon(context),
             ),
           ],
         ),
@@ -65,7 +86,7 @@ class _SocialButton extends StatelessWidget {
   });
 
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +103,9 @@ class _SocialButton extends StatelessWidget {
             child: Text(
               label,
               style: AppTextStyles.labelMd.copyWith(
-                color: AppColors.primary,
+                color: onTap == null
+                    ? AppColors.onSurfaceVariant
+                    : AppColors.primary,
                 fontWeight: FontWeight.w600,
               ),
             ),

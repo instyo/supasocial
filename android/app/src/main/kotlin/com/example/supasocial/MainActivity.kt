@@ -1,4 +1,4 @@
-package com.example.supasocial
+package com.ikhwan.supasocial
 
 import io.flutter.embedding.android.FlutterActivity
 

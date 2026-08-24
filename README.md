@@ -11,7 +11,7 @@ Users can sign up, create photo posts, follow others, like, comment, bookmark-st
 
 | Area | What’s included |
 |------|-----------------|
-| **Auth** | Email / password sign-up & sign-in (Google/Apple UI placeholders — not wired yet) |
+| **Auth** | Email / password + Google Sign-In (Apple still UI placeholder) |
 | **Profile** | View/edit profile, avatar upload, bio, website, stats, post grid |
 | **Posts** | Create post (image + caption + location), feed, post detail |
 | **Social** | Like, comment, follow / unfollow |
@@ -358,7 +358,7 @@ Never ship the **service_role** key in the Flutter app.
 
 ## Roadmap / not yet implemented
 
-- Google & Apple sign-in (UI only today)  
+- Apple sign-in (UI only today)  
 - Search / hashtags  
 - Bookmarks as a first-class feature (if not already in your remote schema)  
 - Push notifications  

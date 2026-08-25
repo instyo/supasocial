@@ -18,5 +18,7 @@ abstract class AuthRepository {
 
   Future<AuthResponse> signInWithGoogle();
 
+  Future<AuthResponse> signInWithApple();
+
   Future<void> signOut();
 }

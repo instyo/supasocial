@@ -16,7 +16,7 @@ Users can sign up, create photo posts, follow others, like, comment, bookmark-st
 
 | Area | What’s included |
 |------|-----------------|
-| **Auth** | Email / password + Google Sign-In (Apple still UI placeholder) |
+| **Auth** | Email / password + Google Sign-In + Apple Sign-In |
 | **Profile** | View/edit profile, avatar upload, bio, website, stats, post grid |
 | **Posts** | Create post (image + caption + location), feed, post detail |
 | **Social** | Like, comment, follow / unfollow |
@@ -33,6 +33,7 @@ Users can sign up, create photo posts, follow others, like, comment, bookmark-st
 - **cached_network_image** — image caching
 - **image_picker** — camera / gallery
 - **google_sign_in** — native Google Sign-In (ID token → Supabase)
+- **sign_in_with_apple** + **crypto** — Apple Sign-In (ID token + nonce → Supabase)
 - **google_fonts** — Inter typography
 
 Architecture: **feature-first** + **repository pattern**. UI never talks to Supabase directly.
@@ -47,7 +48,8 @@ Install:
 2. [Supabase CLI](https://supabase.com/docs/guides/cli)
 3. A [Supabase](https://supabase.com) account / project
 4. A [Google Cloud](https://console.cloud.google.com/) project (for Google Sign-In)
-5. Xcode (iOS) and/or Android Studio (Android), if running on devices/simulators
+5. An [Apple Developer](https://developer.apple.com/) account (for Sign in with Apple)
+6. Xcode (iOS) and/or Android Studio (Android), if running on devices/simulators
 
 Check Flutter:
 
@@ -120,9 +122,9 @@ In **Authentication** → **Providers**:
 - Enable **Email**
 - For local/dev, you can disable “Confirm email” so sign-up works immediately
 
-A trigger (`handle_new_user`) creates a row in `public.profiles` when a user signs up (email **or** Google).
+A trigger (`handle_new_user`) creates a row in `public.profiles` when a user signs up (email, Google, or Apple).
 
-For Google, continue with the section below.
+For Google / Apple, continue with the sections below.
 
 ### 6. Run the app
 
@@ -329,6 +331,98 @@ After changing OAuth clients or SHA-1 in Google Cloud, wait a few minutes and do
 
 ---
 
+## Apple Sign-In setup
+
+Hybrid flow (no custom Apple redirect host required):
+
+| Platform | Flow |
+|----------|------|
+| **iOS** | Native Apple sheet → ID token → `signInWithIdToken` |
+| **Android** | Browser OAuth → Supabase callback → **app deep link** → session |
+
+Default deep link: `com.ikhwan.supasocial://login-callback`
+
+### A. Apple Developer
+
+1. **Identifiers → App IDs** → `com.ikhwan.supasocial`  
+   - Enable **Sign In with Apple** (matches `ios/Runner/Runner.entitlements`)
+2. **Identifiers → Services IDs** → create e.g. `com.ikhwan.supasocial.siwa`  
+   - Enable **Sign In with Apple**  
+   - Configure:  
+     - **Domains**: your Supabase host only (e.g. `xxxx.supabase.co`)  
+     - **Return URLs**: `https://xxxx.supabase.co/auth/v1/callback`
+3. **Keys** → create a **Sign in with Apple** key (`.p8`)  
+   - Note **Key ID**, download the `.p8` once  
+   - Note your **Team ID** (Membership details)
+
+### B. Supabase Dashboard
+
+**Authentication → Providers → Apple**
+
+1. Enable **Apple**
+2. **Client IDs**: Bundle ID + Services ID  
+   `com.ikhwan.supasocial,com.ikhwan.supasocial.siwa`
+3. Paste Team ID, Key ID, and `.p8` private key (or generated secret)
+4. Save
+
+**Authentication → URL configuration** (critical for Android)
+
+1. **Redirect URLs** — add exactly (no trailing slash unless you use one in the app too):  
+   `com.ikhwan.supasocial://login-callback`
+2. If this URL is missing, Supabase falls back to **Site URL** (often `http://localhost:3000`) after Apple — that is the usual “why localhost?” bug.
+
+Site URL can stay as-is for web; mobile OAuth uses `redirectTo` from the app.
+
+### C. App config
+
+No Apple secret in the app. Deep link default is in `Env.authRedirectUrl`.
+
+Optional override:
+
+```bash
+--dart-define=AUTH_REDIRECT_URL=com.ikhwan.supasocial://login-callback
+```
+
+Android intent filter is in `android/app/src/main/AndroidManifest.xml`  
+(`scheme=com.ikhwan.supasocial`, `host=login-callback`).
+
+### D. How it works in code
+
+**iOS**
+
+1. Nonce + native Apple sheet  
+2. `signInWithIdToken(provider: apple, …)`  
+3. Optional first-login name → `profiles.full_name`  
+4. `go_router` → `/home`
+
+**Android**
+
+1. `signInWithOAuth(apple, redirectTo: authRedirectUrl)` opens the browser  
+2. Apple → `https://xxxx.supabase.co/auth/v1/callback`  
+3. Supabase redirects to `com.ikhwan.supasocial://login-callback?code=…`  
+4. `supabase_flutter` parses the deep link into a session  
+5. `go_router` → `/home`
+
+Implementation:
+
+- `lib/features/auth/data/repositories/auth_repository_impl.dart`
+- `lib/features/auth/presentation/widgets/social_auth_buttons.dart`
+- `android/app/src/main/AndroidManifest.xml`
+- `ios/Runner/Runner.entitlements`
+- `lib/core/constants/env.dart`
+
+### E. Checklist
+
+- [ ] Sign In with Apple enabled on App ID `com.ikhwan.supasocial`  
+- [ ] Services ID domain + return URL = Supabase host + `/auth/v1/callback`  
+- [ ] Supabase Apple provider configured (Client IDs include Bundle ID + Services ID)  
+- [ ] Supabase **Redirect URLs** includes `com.ikhwan.supasocial://login-callback`  
+- [ ] iOS: tap Apple → authorize → Home  
+- [ ] Android: tap Apple → browser → back into app → Home (not localhost)  
+- [ ] Cancel → no error snackbar  
+
+---
+
 ## Supabase migrations workflow
 
 This project treats the remote database as the source of truth and pulls schema into git with the CLI.
@@ -521,8 +615,9 @@ Keep this file out of git or use placeholders if you share the repo.
 | `SUPABASE_ANON_KEY` | Public anon key (safe for client with RLS) |
 | `GOOGLE_WEB_CLIENT_ID` | Google **Web** OAuth client ID (required for Google Sign-In) |
 | `GOOGLE_IOS_CLIENT_ID` | Google **iOS** OAuth client ID (optional; defaults in `Env` for this project) |
+| `AUTH_REDIRECT_URL` | OAuth deep link (optional; default `com.ikhwan.supasocial://login-callback`) |
 
-Never ship the **service_role** key or the Google **client secret** in the Flutter app.
+Never ship the **service_role** key, Google **client secret**, or Apple **.p8** private key in the Flutter app.
 
 ---
 
@@ -540,7 +635,12 @@ Never ship the **service_role** key or the Google **client secret** in the Flutt
 | `[16] Account reauth failed` on Android | SHA-1 mismatch. Use `debug.keystore` SHA-1 from this repo (`signingReport`) and register it on the **Android** OAuth client. Package must be `com.ikhwan.supasocial`. |
 | Google works on iOS, fails on Android | Android OAuth client + correct SHA-1; rebuild after Gradle signing change |
 | Google works on Android, fails on iOS | Reversed client ID in `Info.plist`; `GOOGLE_IOS_CLIENT_ID`; Supabase **Skip nonce check** ON |
-| User cancels Google sheet | Expected — no error snackbar |
+| Apple Android ends on `localhost:3000` | Add `com.ikhwan.supasocial://login-callback` to Supabase **Redirect URLs** (exact match). Site URL fallback is localhost by default. |
+| Apple Android browser works but app never logs in | Deep link intent-filter; rebuild app; confirm redirect URL scheme/host match `AndroidManifest` |
+| Apple fails on Android after browser | Services ID → Supabase callback; Apple provider secret; Redirect URLs allow-list |
+| Apple fails on iOS | App ID capability + entitlements; Supabase Client IDs include Bundle ID `com.ikhwan.supasocial` |
+| Apple user has empty name | Normal after first login if name was skipped; Apple only sends name once — edit profile |
+| User cancels Google / Apple sheet | Expected — no error snackbar |
 | Still failing after Cloud changes | Wait a few minutes; uninstall app / full restart; confirm Web client ID is used as `serverClientId` |
 
 ---
@@ -551,14 +651,13 @@ Never ship the **service_role** key or the Google **client secret** in the Flutt
 - Counters are trigger-owned — don’t trust client-side count writes.  
 - Anon key is public by design; security lives in RLS + storage policies.  
 - Prefer confirming email in production.  
-- Only the Google **Web client ID** belongs in the app; keep the **client secret** in Supabase only.  
+- Only the Google **Web client ID** belongs in the app for social auth; keep OAuth secrets and the Apple `.p8` in Supabase / Apple Developer only.  
 - Don’t commit real dart-define values, keystores with production keys, or `google-services.json` with secrets if you add one later.
 
 ---
 
 ## Roadmap / not yet implemented
 
-- Apple sign-in (UI only today)  
 - Search / hashtags  
 - Bookmarks as a first-class feature (if not already in your remote schema)  
 - Push notifications  

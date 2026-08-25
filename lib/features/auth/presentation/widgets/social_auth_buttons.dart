@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,16 +12,20 @@ import '../providers/auth_providers.dart';
 class SocialAuthButtons extends ConsumerWidget {
   const SocialAuthButtons({super.key});
 
+  bool get _supportsAppleSignIn =>
+      !kIsWeb && (Platform.isIOS || Platform.isAndroid || Platform.isMacOS);
+
   void _showComingSoon(BuildContext context) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Social sign-in coming soon')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Social sign-in coming soon')));
   }
 
   Future<void> _onGoogle(BuildContext context, WidgetRef ref) async {
-    final result =
-        await ref.read(authControllerProvider.notifier).signInWithGoogle();
+    final result = await ref
+        .read(authControllerProvider.notifier)
+        .signInWithGoogle();
 
     if (!context.mounted || result == true || result == null) return;
 
@@ -28,9 +35,27 @@ class SocialAuthButtons extends ConsumerWidget {
         : 'Google sign-in failed. Please try again.';
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _onApple(BuildContext context, WidgetRef ref) async {
+    final result = await ref
+        .read(authControllerProvider.notifier)
+        .signInWithApple();
+
+    if (!context.mounted || result == true || result == null) return;
+
+    final error = ref.read(authControllerProvider).error;
+    final message = error is Exception
+        ? error.toString().replaceFirst('Exception: ', '')
+        : 'Apple sign-in failed. Please try again.';
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -63,12 +88,14 @@ class SocialAuthButtons extends ConsumerWidget {
               semanticLabel: 'Sign in with Google',
               onTap: isLoading ? null : () => _onGoogle(context, ref),
             ),
-            const SizedBox(width: AppSpacing.sm + 4),
-            _SocialButton(
-              assetPath: 'assets/images/apple.png',
-              semanticLabel: 'Sign in with Apple',
-              onTap: isLoading ? null : () => _showComingSoon(context),
-            ),
+            if (_supportsAppleSignIn) ...[
+              const SizedBox(width: AppSpacing.sm + 4),
+              _SocialButton(
+                assetPath: 'assets/images/apple.png',
+                semanticLabel: 'Sign in with Apple',
+                onTap: isLoading ? null : () => _onApple(context, ref),
+              ),
+            ],
             const SizedBox(width: AppSpacing.sm + 4),
             _SocialButton(
               assetPath: 'assets/images/facebook.png',

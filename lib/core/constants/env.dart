@@ -24,6 +24,13 @@ class Env {
         '1026094281591-1ii2lv3bn17s7imc65qbmqsa1f97l51t.apps.googleusercontent.com',
   );
 
+  /// Deep link used as OAuth `redirectTo` (Android Apple Sign-In).
+  /// Must match AndroidManifest intent-filter and Supabase Redirect URLs exactly.
+  static const authRedirectUrl = String.fromEnvironment(
+    'AUTH_REDIRECT_URL',
+    defaultValue: 'com.ikhwan.supasocial://login-callback',
+  );
+
   static bool get hasValidCredentials =>
       !supabaseUrl.contains('YOUR_PROJECT') &&
       !supabaseAnonKey.contains('YOUR_SUPABASE');

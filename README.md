@@ -358,14 +358,99 @@ Default deep link: `com.ikhwan.supasocial://login-callback`
    - Note **Key ID**, download the `.p8` once  
    - Note your **Team ID** (Membership details)
 
-### B. Supabase Dashboard
+### B. Generate Apple client secret (OAuth JWT) — important
+
+Android / web Apple Sign-In uses Supabase’s **OAuth** flow. Apple does **not** accept the raw `.p8` file as `client_secret`. You must create a short-lived **JWT** signed with the `.p8` key and paste that JWT into Supabase as the Apple **Secret**.
+
+If the secret is wrong, Android fails after Apple login with:
+
+```text
+Unable to exchange external code: …
+```
+
+(`…` is only the first 4 chars of the auth code — not an Apple error code. The real failure is Supabase ↔ Apple token exchange.)
+
+#### Why not only the Supabase dashboard generator?
+
+Some setups hit `Unable to exchange external code` when the secret was produced only via the dashboard helper (wrong `sub`, bad paste, Safari issues, etc.). This project generates the secret locally with Node so every claim is explicit and correct.
+
+Reference script:  
+[gist: dlazares Apple client secret JWT](https://gist.github.com/dlazares/c68fec4b0fa05a631a5452e8a050cd57)
+
+#### What the JWT must contain
+
+| Claim / header | Value |
+|----------------|--------|
+| `iss` | Your Apple **Team ID** |
+| `sub` | **Services ID** (e.g. `com.ikhwan.supasocial.auth`) — **not** the Bundle ID |
+| `aud` | `https://appleid.apple.com` |
+| `iat` | now (unix seconds) |
+| `exp` | now + up to **6 months** (Apple max) |
+| header `kid` | Apple **Key ID** for the `.p8` |
+| algorithm | `ES256` |
+| signing key | contents of `AuthKey_XXXXXXXXXX.p8` |
+
+**Critical:** `sub` must equal the **Services ID** used for OAuth, and that same Services ID must be the **first** entry in Supabase Apple **Client IDs**. Supabase uses `Client IDs[0]` as Apple `client_id` for OAuth.
+
+#### Generate the secret (Node)
+
+```bash
+npm install jsonwebtoken
+```
+
+```js
+// generate-apple-secret.js
+// Based on https://gist.github.com/dlazares/c68fec4b0fa05a631a5452e8a050cd57
+const jwt = require('jsonwebtoken')
+const fs = require('fs')
+
+// MUST be the Services ID (OAuth), not the iOS Bundle ID
+const appleId = 'com.ikhwan.supasocial.auth'
+const keyId = 'XXXXXXXXXX'   // 10-char Key ID from Apple Keys
+const teamId = 'ZZZZZZZZZZ'  // Team ID
+const privateKey = fs.readFileSync('./AuthKey_XXXXXXXXXX.p8')
+
+const secret = jwt.sign(
+  {
+    iss: teamId,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 86400 * 180, // 6 months
+    aud: 'https://appleid.apple.com',
+    sub: appleId,
+  },
+  privateKey,
+  {
+    algorithm: 'ES256',
+    keyid: keyId,
+  },
+)
+
+console.log(secret)
+```
+
+```bash
+node generate-apple-secret.js
+```
+
+Copy the single-line JWT output (starts with `eyJ…`).
+
+**Do not commit** the `.p8`, the script with real IDs, or the JWT. Keep them local / secrets manager only.
+
+#### Rotate every 6 months
+
+Apple client secrets expire (max ~180 days). Set a calendar reminder to regenerate the JWT and paste it again into Supabase, or Android Apple OAuth will start failing with the same exchange error.
+
+### C. Supabase Dashboard
 
 **Authentication → Providers → Apple**
 
 1. Enable **Apple**
 2. **Client IDs**: Services ID **first**, then Bundle ID  
-   `com.ikhwan.supasocial.auth,com.ikhwan.supasocial`
-3. Paste Team ID, Key ID, and `.p8` private key (or generated secret)
+   `com.ikhwan.supasocial.auth,com.ikhwan.supasocial`  
+   - First ID = OAuth `client_id` (must match JWT `sub`)  
+   - Bundle ID still required for native iOS `signInWithIdToken`
+3. **Secret**: paste the **JWT** from step B (not the raw `.p8` file contents)  
+   - If the UI also has Team ID / Key ID / private key fields, prefer the single pre-generated **Secret** field with this JWT so `sub` is under your control
 4. Save
 
 **Authentication → URL configuration** (critical for Android)
@@ -376,7 +461,7 @@ Default deep link: `com.ikhwan.supasocial://login-callback`
 
 Site URL can stay as-is for web; mobile OAuth uses `redirectTo` from the app.
 
-### C. App config
+### E. App config
 
 No Apple secret in the app. Deep link default is in `Env.authRedirectUrl`.
 
@@ -389,7 +474,7 @@ Optional override:
 Android intent filter is in `android/app/src/main/AndroidManifest.xml`  
 (`scheme=com.ikhwan.supasocial`, `host=login-callback`).
 
-### D. How it works in code
+### F. How it works in code
 
 **iOS**
 
@@ -414,12 +499,14 @@ Implementation:
 - `ios/Runner/Runner.entitlements`
 - `lib/core/constants/env.dart`
 
-### E. Checklist
+### G. Checklist
 
 - [ ] Sign In with Apple enabled on App ID `com.ikhwan.supasocial`  
-- [ ] Services ID domain + return URL = Supabase host + `/auth/v1/callback`  
-- [ ] Supabase Apple provider configured (Client IDs: `com.ikhwan.supasocial.auth,com.ikhwan.supasocial` — Services ID first)  
+- [ ] Services ID `com.ikhwan.supasocial.auth` domain + return URL = Supabase host + `/auth/v1/callback`  
+- [ ] Client secret JWT generated locally (`sub` = Services ID); pasted into Supabase Apple **Secret**  
+- [ ] Supabase Client IDs: `com.ikhwan.supasocial.auth,com.ikhwan.supasocial` (Services ID **first**)  
 - [ ] Supabase **Redirect URLs** includes `com.ikhwan.supasocial://login-callback`  
+- [ ] Calendar reminder to rotate Apple secret every ≤ 6 months  
 - [ ] iOS: tap Apple → authorize → Home  
 - [ ] Android: tap Apple → browser → back into app → Home (not localhost)  
 - [ ] Cancel → no error snackbar  
@@ -642,6 +729,7 @@ Never ship the **service_role** key, Google **client secret**, or Apple **.p8** 
 | Apple Android ends on `localhost:3000` | Add `com.ikhwan.supasocial://login-callback` to Supabase **Redirect URLs** (exact match). Site URL fallback is localhost by default. |
 | Apple Android browser works but app never logs in | Deep link intent-filter; rebuild app; confirm redirect URL scheme/host match `AndroidManifest` |
 | Apple fails on Android after browser | Services ID → Supabase callback; Apple provider secret; Redirect URLs allow-list |
+| `Unable to exchange external code` | Apple rejected token exchange. Regenerate client secret JWT with `sub` = Services ID (`com.ikhwan.supasocial.auth`); put Services ID **first** in Client IDs; do not paste raw `.p8` as Secret. See [gist](https://gist.github.com/dlazares/c68fec4b0fa05a631a5452e8a050cd57). Check Auth logs for the real internal error. |
 | Apple fails on iOS | App ID capability + entitlements; Supabase Client IDs include Bundle ID `com.ikhwan.supasocial` |
 | Apple user has empty name | Normal after first login if name was skipped; Apple only sends name once — edit profile |
 | User cancels Google / Apple sheet | Expected — no error snackbar |

@@ -15,13 +15,6 @@ class SocialAuthButtons extends ConsumerWidget {
   bool get _supportsAppleSignIn =>
       !kIsWeb && (Platform.isIOS || Platform.isAndroid || Platform.isMacOS);
 
-  void _showComingSoon(BuildContext context) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Social sign-in coming soon')));
-  }
-
   Future<void> _onGoogle(BuildContext context, WidgetRef ref) async {
     final result = await ref
         .read(authControllerProvider.notifier)
@@ -51,6 +44,24 @@ class SocialAuthButtons extends ConsumerWidget {
     final message = error is Exception
         ? error.toString().replaceFirst('Exception: ', '')
         : 'Apple sign-in failed. Please try again.';
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _onFacebook(BuildContext context, WidgetRef ref) async {
+    final result = await ref
+        .read(authControllerProvider.notifier)
+        .signInWithFacebook();
+
+    if (!context.mounted || result == true || result == null) return;
+
+    final error = ref.read(authControllerProvider).error;
+    final message = error is Exception
+        ? error.toString().replaceFirst('Exception: ', '')
+        : 'Facebook sign-in failed. Please try again.';
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(
@@ -100,7 +111,7 @@ class SocialAuthButtons extends ConsumerWidget {
             _SocialButton(
               assetPath: 'assets/images/facebook.png',
               semanticLabel: 'Sign in with Facebook',
-              onTap: isLoading ? null : () => _showComingSoon(context),
+              onTap: isLoading ? null : () => _onFacebook(context, ref),
             ),
           ],
         ),

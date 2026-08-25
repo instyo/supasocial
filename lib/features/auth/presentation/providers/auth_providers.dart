@@ -86,6 +86,23 @@ class AuthController extends AsyncNotifier<void> {
     }
   }
 
+  /// Returns `true` on success, `false` on failure.
+  /// Returns `null` when the user cancels the Facebook OAuth browser flow.
+  Future<bool?> signInWithFacebook() async {
+    state = const AsyncLoading();
+    try {
+      await _repository.signInWithFacebook();
+      state = const AsyncData(null);
+      return true;
+    } on AuthCancelled {
+      state = const AsyncData(null);
+      return null;
+    } catch (e, st) {
+      state = AsyncError(e, st);
+      return false;
+    }
+  }
+
   Future<void> signOut() async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() => _repository.signOut());

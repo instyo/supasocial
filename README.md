@@ -16,7 +16,7 @@ Users can sign up, create photo posts, follow others, like, comment, bookmark-st
 
 | Area | What’s included |
 |------|-----------------|
-| **Auth** | Email / password + Google Sign-In + Apple Sign-In |
+| **Auth** | Email / password + Google, Apple, and Facebook Sign-In |
 | **Profile** | View/edit profile, avatar upload, bio, website, stats, post grid |
 | **Posts** | Create post (image + caption + location), feed, post detail |
 | **Social** | Like, comment, follow / unfollow |
@@ -513,6 +513,73 @@ Implementation:
 
 ---
 
+## Facebook Sign-In setup
+
+Browser **OAuth** on all platforms (same deep-link path as Android Apple). No Facebook SDK in the app.
+
+| Platform | Flow |
+|----------|------|
+| **iOS / Android / desktop** | `signInWithOAuth(facebook)` → browser → Supabase callback → app deep link |
+| **Web** | same OAuth flow (`redirectTo` optional) |
+
+Deep link (shared with Apple Android): `com.ikhwan.supasocial://login-callback`
+
+### A. Meta / Facebook Developers
+
+1. Go to [Meta for Developers](https://developers.facebook.com/) → **My Apps** → **Create App**
+2. Use a type that supports **Facebook Login** (e.g. Consumer / Authenticate and request data)
+3. Add product **Facebook Login** → **Settings**
+4. **Valid OAuth Redirect URIs** — add exactly:  
+   `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback`
+5. Under **App settings** → **Basic**, note **App ID** and **App Secret**
+6. For development, add **Roles → Test users** (or your Facebook account as admin/developer)
+7. When ready for production, complete App Review if required and switch the app to **Live**
+
+Default Login permissions used by Supabase: `email`, `public_profile`.
+
+### B. Supabase Dashboard
+
+**Authentication → Providers → Facebook**
+
+1. Enable **Facebook**
+2. **Client ID** = Facebook **App ID**
+3. **Client Secret** = Facebook **App Secret**
+4. Save
+
+**Authentication → URL configuration**
+
+Ensure Redirect URLs include (same as Apple Android):
+
+```text
+com.ikhwan.supasocial://login-callback
+```
+
+### C. App
+
+No Facebook credentials in the Flutter app. Code path:
+
+1. User taps Facebook on sign-in / sign-up  
+2. `AuthRepository.signInWithFacebook()` → `signInWithOAuth(OAuthProvider.facebook, redirectTo: authRedirectUrl)`  
+3. Browser completes Facebook consent  
+4. Supabase exchanges code and redirects to the deep link  
+5. Session established → `go_router` → `/home`  
+6. `handle_new_user` creates the profile row  
+
+Implementation: `lib/features/auth/data/repositories/auth_repository_impl.dart`  
+Run with the same dart-defines as usual (including `AUTH_REDIRECT_URL` on mobile).
+
+### D. Checklist
+
+- [ ] Facebook app created; Login product enabled  
+- [ ] Valid OAuth Redirect URI = `https://xxxx.supabase.co/auth/v1/callback`  
+- [ ] App ID + App Secret in Supabase Facebook provider  
+- [ ] Supabase Redirect URLs includes `com.ikhwan.supasocial://login-callback`  
+- [ ] Test user / app in Live mode as needed  
+- [ ] Tap Facebook → browser → back to app → Home  
+- [ ] Cancel browser → no error snackbar  
+
+---
+
 ## Supabase migrations workflow
 
 This project treats the remote database as the source of truth and pulls schema into git with the CLI.
@@ -732,7 +799,8 @@ Never ship the **service_role** key, Google **client secret**, or Apple **.p8** 
 | `Unable to exchange external code` | Apple rejected token exchange. Regenerate client secret JWT with `sub` = Services ID (`com.ikhwan.supasocial.auth`); put Services ID **first** in Client IDs; do not paste raw `.p8` as Secret. See [gist](https://gist.github.com/dlazares/c68fec4b0fa05a631a5452e8a050cd57). Check Auth logs for the real internal error. |
 | Apple fails on iOS | App ID capability + entitlements; Supabase Client IDs include Bundle ID `com.ikhwan.supasocial` |
 | Apple user has empty name | Normal after first login if name was skipped; Apple only sends name once — edit profile |
-| User cancels Google / Apple sheet | Expected — no error snackbar |
+| Facebook OAuth fails after browser | Valid OAuth Redirect URI = Supabase `/auth/v1/callback`; App ID/Secret in Supabase; app Live or use test users |
+| User cancels Google / Apple / Facebook sheet | Expected — no error snackbar |
 | Still failing after Cloud changes | Wait a few minutes; uninstall app / full restart; confirm Web client ID is used as `serverClientId` |
 
 ---

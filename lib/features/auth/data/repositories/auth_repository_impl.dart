@@ -130,7 +130,18 @@ class AuthRepositoryImpl implements AuthRepository {
     if (useNativeApple) {
       return _signInWithAppleNative();
     }
-    return _signInWithAppleOAuth();
+    return _signInWithOAuth(
+      OAuthProvider.apple,
+      failureLabel: 'Apple',
+    );
+  }
+
+  @override
+  Future<AuthResponse> signInWithFacebook() {
+    return _signInWithOAuth(
+      OAuthProvider.facebook,
+      failureLabel: 'Facebook',
+    );
   }
 
   /// Native Apple sheet → Supabase `signInWithIdToken` (iOS / macOS).
@@ -183,12 +194,13 @@ class AuthRepositoryImpl implements AuthRepository {
     }
   }
 
-  /// Browser OAuth → deep link session (Android / non-Apple platforms).
+  /// Browser OAuth → deep link session.
   ///
-  /// Per Supabase docs: do **not** use `sign_in_with_apple` here.
-  /// Use `signInWithOAuth` + deep link. Requires [Env.authRedirectUrl] in
-  /// Supabase Auth → URL configuration → Redirect URLs.
-  Future<AuthResponse> _signInWithAppleOAuth() async {
+  /// Requires [Env.authRedirectUrl] in Supabase Auth → Redirect URLs.
+  Future<AuthResponse> _signInWithOAuth(
+    OAuthProvider provider, {
+    required String failureLabel,
+  }) async {
     try {
       // Listen before launching so we never miss the signedIn event.
       final signedIn = _client.auth.onAuthStateChange
@@ -199,19 +211,21 @@ class AuthRepositoryImpl implements AuthRepository {
           .timeout(_oauthTimeout);
 
       final launched = await _client.auth.signInWithOAuth(
-        OAuthProvider.apple,
+        provider,
         redirectTo: kIsWeb ? null : Env.authRedirectUrl,
-        authScreenLaunchMode: LaunchMode.platformDefault,
+        authScreenLaunchMode: kIsWeb
+            ? LaunchMode.platformDefault
+            : LaunchMode.externalApplication,
       );
 
       if (!launched) {
-        throw const AuthFailure('Could not open Apple sign-in.');
+        throw AuthFailure('Could not open $failureLabel sign-in.');
       }
 
       final data = await signedIn;
       final session = data.session;
       if (session == null) {
-        throw const AuthFailure('Apple sign-in failed. Please try again.');
+        throw AuthFailure('$failureLabel sign-in failed. Please try again.');
       }
 
       return AuthResponse(session: session, user: session.user);

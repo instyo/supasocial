@@ -134,7 +134,8 @@ Credentials are injected at compile time via `--dart-define` (see `lib/core/cons
 flutter run \
   --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \
   --dart-define=SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY \
-  --dart-define=GOOGLE_WEB_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
+  --dart-define=GOOGLE_WEB_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com \
+  --dart-define=AUTH_REDIRECT_URL=com.ikhwan.supasocial://login-callback
 ```
 
 **iOS simulator:**
@@ -143,7 +144,8 @@ flutter run \
 flutter run -d iPhone \
   --dart-define=SUPABASE_URL=... \
   --dart-define=SUPABASE_ANON_KEY=... \
-  --dart-define=GOOGLE_WEB_CLIENT_ID=...
+  --dart-define=GOOGLE_WEB_CLIENT_ID=... \
+  --dart-define=AUTH_REDIRECT_URL=com.ikhwan.supasocial://login-callback
 ```
 
 **Android emulator / device:**
@@ -152,7 +154,8 @@ flutter run -d iPhone \
 flutter run -d emulator-5554 \
   --dart-define=SUPABASE_URL=... \
   --dart-define=SUPABASE_ANON_KEY=... \
-  --dart-define=GOOGLE_WEB_CLIENT_ID=...
+  --dart-define=GOOGLE_WEB_CLIENT_ID=... \
+  --dart-define=AUTH_REDIRECT_URL=com.ikhwan.supasocial://login-callback
 ```
 
 Do **not** commit real keys. Prefer local shell aliases, IDE run configs, or a private script that is gitignored.
@@ -346,7 +349,7 @@ Default deep link: `com.ikhwan.supasocial://login-callback`
 
 1. **Identifiers → App IDs** → `com.ikhwan.supasocial`  
    - Enable **Sign In with Apple** (matches `ios/Runner/Runner.entitlements`)
-2. **Identifiers → Services IDs** → create e.g. `com.ikhwan.supasocial.siwa`  
+2. **Identifiers → Services IDs** → create e.g. `com.ikhwan.supasocial.auth`  
    - Enable **Sign In with Apple**  
    - Configure:  
      - **Domains**: your Supabase host only (e.g. `xxxx.supabase.co`)  
@@ -360,8 +363,8 @@ Default deep link: `com.ikhwan.supasocial://login-callback`
 **Authentication → Providers → Apple**
 
 1. Enable **Apple**
-2. **Client IDs**: Bundle ID + Services ID  
-   `com.ikhwan.supasocial,com.ikhwan.supasocial.siwa`
+2. **Client IDs**: Services ID **first**, then Bundle ID  
+   `com.ikhwan.supasocial.auth,com.ikhwan.supasocial`
 3. Paste Team ID, Key ID, and `.p8` private key (or generated secret)
 4. Save
 
@@ -415,7 +418,7 @@ Implementation:
 
 - [ ] Sign In with Apple enabled on App ID `com.ikhwan.supasocial`  
 - [ ] Services ID domain + return URL = Supabase host + `/auth/v1/callback`  
-- [ ] Supabase Apple provider configured (Client IDs include Bundle ID + Services ID)  
+- [ ] Supabase Apple provider configured (Client IDs: `com.ikhwan.supasocial.auth,com.ikhwan.supasocial` — Services ID first)  
 - [ ] Supabase **Redirect URLs** includes `com.ikhwan.supasocial://login-callback`  
 - [ ] iOS: tap Apple → authorize → Home  
 - [ ] Android: tap Apple → browser → back into app → Home (not localhost)  
@@ -596,7 +599,8 @@ Add dart-defines so you don’t type them every time:
       "toolArgs": [
         "--dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co",
         "--dart-define=SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY",
-        "--dart-define=GOOGLE_WEB_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"
+        "--dart-define=GOOGLE_WEB_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com",
+        "--dart-define=AUTH_REDIRECT_URL=com.ikhwan.supasocial://login-callback"
       ]
     }
   ]
